@@ -1,6 +1,0 @@
-# 원본 CSV 는 용량이 커서 커밋하지 않음 (결과물 public/data.json 만 커밋)
-*.csv
-*.xlsx
-
-# 지오코딩 캐시(빌드 산출물, 4MB) — 커밋하지 않고 GitLab CI 캐시로 재사용
-.geocode-cache.json

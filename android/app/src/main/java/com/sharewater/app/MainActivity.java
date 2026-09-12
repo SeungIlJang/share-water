@@ -1,4 +1,4 @@
-package com.sharetoilet.app;
+package com.sharewater.app;
 
 import com.getcapacitor.BridgeActivity;
 

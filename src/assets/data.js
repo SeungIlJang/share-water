@@ -1,4 +1,4 @@
-// 화장실 데이터 로딩 (Phase 1: 원격 최신본 우선 + 로컬 번들 폴백)
+// 음수대 데이터 로딩 (원격 최신본 우선 + 로컬 번들 폴백)
 //
 // - 로컬 번들: public/data.json (앱에 항상 포함, 오프라인 대비)
 // - 원격 최신: VITE_DATA_URL (호스팅된 data.json) — 앱 재배포 없이 갱신 가능
@@ -29,7 +29,7 @@ const ver = (o) => (o && Number(o.v)) || 0;
 const VER_TIMEOUT = 2500;   // 원격 버전 확인: 느리면 2.5초 후 로컬로
 const DATA_TIMEOUT = 15000; // 원격 데이터 다운로드: 최대 15초
 
-async function loadToilets() {
+async function loadDrinkingWater() {
   // 1) 원격이 로컬보다 최신이면 원격 사용 (원격이 느리면 타임아웃 → 로컬)
   if (REMOTE_DATA && REMOTE_VER !== REMOTE_DATA) {
     try {
@@ -55,4 +55,4 @@ async function loadToilets() {
   }
 }
 
-export const toiletsData = loadToilets();
+export const drinkingWaterData = loadDrinkingWater();

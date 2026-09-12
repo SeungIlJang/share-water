@@ -1,6 +1,6 @@
 {
-  "name": "map-test",
-  "version": "0.0.0",
+  "name": "share-water",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "build:native": "vite build",
     "preview": "vite preview",
     "start": "vite preview --host 0.0.0.0 --port $PORT",
-    "data:build": "node scripts/enrich-toilets.mjs",
+    "data:build": "node scripts/fetch-drinking-water.mjs",
     "cap:sync": "npm run build:native && cap sync",
     "android:open": "npm run cap:sync && cap open android",
     "android:run": "npm run cap:sync && cap run android",
@@ -23,7 +23,6 @@
     "@capacitor-community/admob": "^6.2.0",
     "@capacitor/app-launcher": "^6.0.4",
     "@capacitor/core": "^6.2.1",
-    "@capacitor/filesystem": "^6.0.4",
     "@capacitor/geolocation": "^6.1.1",
     "@capgo/capacitor-updater": "^6.51.15",
     "vue": "^3.5.13",
@@ -35,7 +34,6 @@
     "@capacitor/cli": "^6.2.1",
     "@vitejs/plugin-vue": "^5.2.1",
     "archiver": "^7.0.1",
-    "iconv-lite": "^0.7.3",
     "vite": "^6.0.11",
     "vite-plugin-vue-devtools": "^7.7.1"
   },

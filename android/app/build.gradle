@@ -10,14 +10,14 @@ def defaultAdMobAppId = 'ca-app-pub-3940256099942544~3347511713'
 def configuredAdMobAppId = System.getenv('ADMOB_APP_ID') ?: project.findProperty('ADMOB_APP_ID') ?: defaultAdMobAppId
 
 android {
-    namespace "com.sharetoilet.app"
+    namespace "com.sharewater.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.sharetoilet.app"
+        applicationId "com.sharewater.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 9
-        versionName "1.2"
+        versionCode 1
+        versionName "1.0"
         manifestPlaceholders = [admobAppId: configuredAdMobAppId]
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

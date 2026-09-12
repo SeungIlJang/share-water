@@ -1,8 +1,8 @@
 import { Capacitor } from '@capacitor/core';
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
 
-const MANIFEST_URL = 'https://share-toilet.onrender.com/live-update/manifest.json';
-const UPDATE_ORIGIN = 'https://share-toilet.onrender.com';
+const MANIFEST_URL = 'https://share-water.onrender.com/live-update/manifest.json';
+const UPDATE_ORIGIN = 'https://share-water.onrender.com';
 const CHECK_TIMEOUT_MS = 7000;
 
 const fetchManifest = async () => {

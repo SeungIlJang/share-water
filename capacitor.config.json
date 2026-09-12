@@ -1,6 +1,6 @@
 {
-  "appId": "com.sharetoilet.app",
-  "appName": "모두의 화장실",
+  "appId": "com.sharewater.app",
+  "appName": "모두의 음수대",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"

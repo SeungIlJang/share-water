@@ -1,42 +1,31 @@
-# Share Toilet 🚻
+# 모두의 음수대 💧
 
-내 주변의 서울시 공중화장실을 찾아주는 지도 앱.
-Vue 3 + Vite 웹앱을 **Capacitor 로 Android/iOS 네이티브 앱**으로 실행합니다.
-
-설치 앱은 AAB에 포함된 화면을 기본으로 실행하고, Render에 새 웹 번들이 배포되면 안전하게 내려받아 다음 실행부터 자동 반영합니다. 네트워크가 없거나 업데이트에 문제가 생기면 마지막 정상 화면을 계속 사용합니다.
+현재 위치 주변의 서울시 아리수 공원 음수대를 찾아주는 지도 앱입니다.
+Vue 3 + Vite 웹앱을 Capacitor로 Android 앱에 포함합니다.
 
 ## 주요 기능
-- 📍 **내 주변** — 현재 위치 기준 반경 내 화장실을 거리순으로 표시 (반경 300m~3km 선택, 거리 배지)
-- 🔍 **이 근처 검색** — 지도를 옮긴 지점 기준으로 재검색
-- 🔎 **검색** — 구/동 이름으로 검색
-- 🚻 **화장실 픽토그램 마커** — 탭하면 정보창(주소·거리), 선택 마커 강조
-- 🗺️ 네이버 지도 기반
 
-## 빠른 시작
+- 현재 위치 또는 지도 중심 기준 반경 검색
+- 공원명·구·동·주소·상세 위치 검색
+- 거리순 목록과 지도 마커
+- 네이버 지도 도보 길찾기와 주소 복사
+- 공식 데이터를 앱에 포함해 네트워크 장애 시에도 위치 검색 가능
+
+## 데이터 출처
+
+- [서울시 공원음수대 정보 조회](https://data.seoul.go.kr/dataList/OA-20884/S/1/datasetView.do)
+- 제공기관: 서울특별시 서울아리수본부
+- 이용조건: 공공누리 제1유형(출처표시, 상업적 이용 및 변경 가능)
+
+## 실행
 
 ```bash
 npm install
-
-# 웹으로 실행
+npm run data:build
 npm run dev
-
-# Android 네이티브 앱으로 실행 (JDK 17 + Android SDK 필요)
-npm run android:run
-
-# 디버그 APK 빌드
-npm run android:apk
 ```
 
-> 이 자동 업데이트 기능을 기존 사용자에게 전달하려면 최초 1회 새 AAB가 필요합니다. 이후 화면·문구·검색·지도 로직 같은 웹 수정은 새 AAB 없이 반영되며, 네이티브 플러그인, Android 권한, 앱 아이콘, 앱 이름, 버전 코드는 계속 새 AAB가 필요합니다.
+Android 빌드는 `npm run android:aab`를 사용합니다.
 
-> `.env.example` 을 `.env` 로 복사하고 API 키를 채우세요.
-> 지도 인증 등 상세 설정·빌드·트러블슈팅은 **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** 참고.
-
-## ⚠️ 지도가 "인증 실패" 로 뜨면
-1. **스크립트 형식** — 신규 NCP Maps 키는 `index.html` 에서 `oapi.map.naver.com ... ?ncpKeyId=` 형식 사용(현재 적용됨). 구버전 키는 `openapi.map.naver.com ... ?ncpClientId=`.
-2. **출처 등록** — 네이버 클라우드 콘솔 → Maps → Web 서비스 URL 에 `https://localhost` 추가.
-
-자세한 내용은 [docs/DEVELOPMENT.md #8](docs/DEVELOPMENT.md#8-️-네이버-지도-인증-필수-설정).
-
-## 문서
-- 📘 [개발 문서 (DEVELOPMENT.md)](docs/DEVELOPMENT.md) — 아키텍처, 환경변수, 빌드/실행, 개발 이력, 트러블슈팅
+네이버 지도 콘솔의 Web 서비스 URL에는 Android 앱용 `https://localhost`를 등록해야 합니다.
+웹 배포 시에는 실제 배포 도메인도 추가합니다.
