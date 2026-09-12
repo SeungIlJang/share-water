@@ -4,10 +4,13 @@ import NaverMapMarker from '@/components/NaverMapMarker.vue';
 import { drinkingWaterData } from '@/assets/data.js';
 import { getCurrentPosition } from '@/utils/geolocation.js';
 import { initializeAdMob } from '@/services/adMob.js';
+import { DEFAULT_SEARCH_RADIUS_METERS, SEARCH_RADIUS_OPTIONS } from '@/config.js';
+import { getDistanceKm, locationsWithinRadius } from '@/utils/distance.js';
 
 const DEFAULT_POSITION = { latitude: 37.5297, longitude: 126.9647 };
-const DEFAULT_RADIUS = Number(import.meta.env.VITE_DEFAULT_RADIUS) || 3000;
-const RADIUS_OPTIONS = [500, 1000, 2000, 3000, 5000, 10000];
+const configuredRadius = Number(import.meta.env.VITE_DEFAULT_RADIUS);
+const DEFAULT_RADIUS = configuredRadius > 0 ? configuredRadius : DEFAULT_SEARCH_RADIUS_METERS;
+const RADIUS_OPTIONS = SEARCH_RADIUS_OPTIONS;
 
 const locations = ref([]);
 const selectedId = ref(null);
@@ -22,16 +25,6 @@ const pendingRegion = ref(null);
 const showSearchAreaBtn = ref(false);
 const sheetExpanded = ref(false);
 
-const deg2rad = (deg) => deg * (Math.PI / 180);
-const distanceKm = (lat1, lon1, lat2, lon2) => {
-  const radius = 6371;
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
 const formatDistance = (km) => (
   km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`
 );
@@ -41,7 +34,7 @@ const withDistance = (items) => {
   const { latitude, longitude } = searchOrigin.value;
   return items.map((item) => ({
     ...item,
-    distance: distanceKm(latitude, longitude, item.latitude, item.longitude),
+    distance: getDistanceKm(latitude, longitude, item.latitude, item.longitude),
   }));
 };
 
@@ -60,10 +53,7 @@ const searchResults = computed(() => {
 });
 
 const nearbyLocations = computed(() => {
-  if (!searchOrigin.value) return [];
-  return withDistance(locations.value)
-    .filter((item) => item.distance <= searchRadius.value / 1000)
-    .sort((a, b) => a.distance - b.distance);
+  return locationsWithinRadius(locations.value, searchOrigin.value, searchRadius.value);
 });
 
 const displayedLocations = computed(() => (
@@ -141,7 +131,7 @@ const handleRegionChanged = (center) => {
     showSearchAreaBtn.value = true;
     return;
   }
-  showSearchAreaBtn.value = distanceKm(
+  showSearchAreaBtn.value = getDistanceKm(
     searchOrigin.value.latitude,
     searchOrigin.value.longitude,
     center.latitude,
