@@ -187,6 +187,7 @@ onUnmounted(() => {
     <section class="map-container">
       <NaverMapMarker
         :locations="displayedLocations"
+        :all-locations="locations"
         :selected-id="selectedId"
         :center="centerLocation"
         @region-changed="handleRegionChanged"

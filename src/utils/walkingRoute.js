@@ -1,5 +1,9 @@
 const DEFAULT_ROUTING_API_URL = 'https://valhalla1.openstreetmap.de/route';
 
+const matrixApiUrl = (apiUrl) => (
+  apiUrl.replace(/\/route\/?(?:\?.*)?$/, '/sources_to_targets')
+);
+
 export const decodePolyline6 = (encoded) => {
   const coordinates = [];
   let index = 0;
@@ -73,4 +77,26 @@ export const fetchWalkingRoute = async (locations, options = {}) => {
     distanceKm: Number(result.trip.summary?.length) || 0,
     durationMinutes: Math.max(1, Math.round((Number(result.trip.summary?.time) || 0) / 60)),
   };
+};
+
+export const fetchWalkingDistances = async (origin, targets, options = {}) => {
+  if (!targets.length) return [];
+  const payload = {
+    sources: [{ lat: origin.latitude, lon: origin.longitude }],
+    targets: targets.map(({ latitude, longitude }) => ({ lat: latitude, lon: longitude })),
+    costing: 'pedestrian',
+    units: 'kilometers',
+  };
+  const apiUrl = matrixApiUrl(options.apiUrl || DEFAULT_ROUTING_API_URL);
+  const url = `${apiUrl}?json=${encodeURIComponent(JSON.stringify(payload))}`;
+  const response = await fetch(url, { signal: options.signal });
+  if (!response.ok) throw new Error(`보행 거리 서버 오류 (${response.status})`);
+  const result = await response.json();
+  const row = result.sources_to_targets?.[0];
+  if (!Array.isArray(row)) throw new Error('보행 거리 결과가 올바르지 않습니다.');
+  return targets.map((target, index) => ({
+    ...target,
+    walkingDistanceKm: Number(row[index]?.distance),
+    walkingDurationMinutes: Math.max(1, Math.round((Number(row[index]?.time) || 0) / 60)),
+  }));
 };

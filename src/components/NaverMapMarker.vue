@@ -7,10 +7,14 @@ import {
   buildNaverRouteWebUrl,
   MAX_NAVER_ROUTE_LOCATIONS,
 } from '@/utils/naverNavigation.js';
-import { fetchWalkingRoute } from '@/utils/walkingRoute.js';
+import { fetchWalkingDistances, fetchWalkingRoute } from '@/utils/walkingRoute.js';
+import { createAutomaticCourse } from '@/utils/coursePlanner.js';
+import { buildGpx, createGpxFilename } from '@/utils/gpx.js';
+import { saveOrShareGpx } from '@/utils/gpxShare.js';
 
 const props = defineProps({
   locations: { type: Array, required: true },
+  allLocations: { type: Array, default: () => [] },
   selectedId: { type: [String, Number], default: null },
   center: { type: Object, default: null },
 });
@@ -27,6 +31,12 @@ const routeLocations = ref([]);
 const displayedRoute = ref(null);
 const routeLoading = ref(false);
 const routeError = ref('');
+const gpxPanelOpen = ref(false);
+const gpxOriginMode = ref('current');
+const gpxTargetDistance = ref(5);
+const automaticCourse = ref(null);
+const gpxLoading = ref(false);
+const gpxSharing = ref(false);
 let mapDomElement;
 let mapDomClickHandler;
 let apiTimer;
@@ -271,6 +281,8 @@ const clearRoute = () => {
   displayedRoute.value = null;
   routeLoading.value = false;
   routeError.value = '';
+  automaticCourse.value = null;
+  gpxLoading.value = false;
   updateSelectedStyles(openInfoId.value);
   refreshOpenInfoWindow();
 };
@@ -283,6 +295,7 @@ const clearDisplayedRoute = () => {
   displayedRoute.value = null;
   routeLoading.value = false;
   routeError.value = '';
+  automaticCourse.value = null;
 };
 
 const fitRouteOnMap = (coordinates) => {
@@ -292,6 +305,24 @@ const fitRouteOnMap = (coordinates) => {
     bounds.extend(new naver.maps.LatLng(latitude, longitude));
   });
   map.value.fitBounds(bounds, 70);
+};
+
+const drawRoute = (result, color = '#087f8c') => {
+  const path = result.coordinates.map(
+    ({ latitude, longitude }) => new naver.maps.LatLng(latitude, longitude),
+  );
+  routePolyline = new naver.maps.Polyline({
+    map: map.value,
+    path,
+    strokeColor: color,
+    strokeOpacity: 0.92,
+    strokeWeight: 7,
+    strokeLineCap: 'round',
+    strokeLineJoin: 'round',
+    zIndex: 180,
+  });
+  displayedRoute.value = result;
+  fitRouteOnMap(result.coordinates);
 };
 
 const showSelectedRoute = async () => {
@@ -314,21 +345,7 @@ const showSelectedRoute = async () => {
     });
     if (selectedIds !== routeLocations.value.map(({ id }) => String(id)).join('|')) return;
 
-    const path = result.coordinates.map(
-      ({ latitude, longitude }) => new naver.maps.LatLng(latitude, longitude),
-    );
-    routePolyline = new naver.maps.Polyline({
-      map: map.value,
-      path,
-      strokeColor: '#087f8c',
-      strokeOpacity: 0.92,
-      strokeWeight: 7,
-      strokeLineCap: 'round',
-      strokeLineJoin: 'round',
-      zIndex: 180,
-    });
-    displayedRoute.value = result;
-    fitRouteOnMap(result.coordinates);
+    drawRoute(result);
   } catch (error) {
     if (error?.name === 'AbortError') return;
     console.error('보행 경로 조회 실패:', error);
@@ -340,6 +357,106 @@ const showSelectedRoute = async () => {
       routeAbortController = null;
     }
   }
+};
+
+const currentMapCenter = () => {
+  const center = map.value?.getCenter?.();
+  return center ? { latitude: center.lat(), longitude: center.lng(), title: '지도 중심' } : null;
+};
+
+const resolveCourseOrigin = async () => {
+  if (gpxOriginMode.value === 'center') return currentMapCenter();
+  if (!userPosition.value) {
+    userPosition.value = await getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 });
+    renderCurrentLocation();
+  }
+  return { ...userPosition.value, title: '현재 위치' };
+};
+
+const generateGpxCourse = async (reroll = false) => {
+  const excludedId = reroll ? automaticCourse.value?.stops?.[0]?.id : null;
+  routeAbortController?.abort();
+  clearDisplayedRoute();
+  routeLocations.value = [];
+  updateSelectedStyles(null);
+  closeInfoWindows();
+  gpxLoading.value = true;
+  routeLoading.value = true;
+  routeError.value = '';
+  const abortController = new AbortController();
+  routeAbortController = abortController;
+
+  try {
+    const origin = await resolveCourseOrigin();
+    if (!origin) throw new Error('출발점을 확인할 수 없습니다.');
+    const candidateLocations = props.allLocations.length ? props.allLocations : props.locations;
+    const result = await createAutomaticCourse({
+      origin,
+      locations: excludedId
+        ? candidateLocations.filter(({ id }) => String(id) !== String(excludedId))
+        : candidateLocations,
+      targetDistanceKm: gpxTargetDistance.value,
+      signal: abortController.signal,
+      fetchDistances: (courseOrigin, targets, options = {}) => fetchWalkingDistances(
+        courseOrigin,
+        targets,
+        {
+          apiUrl: import.meta.env.VITE_ROUTING_API_URL,
+          signal: options.signal,
+        },
+      ),
+      fetchRoute: (points, options = {}) => fetchWalkingRoute(points, {
+        apiUrl: import.meta.env.VITE_ROUTING_API_URL,
+        signal: options.signal,
+      }),
+    });
+    if (routeAbortController !== abortController) return;
+
+    routeLocations.value = result.stops.map((stop) => ({ ...stop }));
+    automaticCourse.value = result;
+    drawRoute(result, '#ef3f43');
+    updateSelectedStyles(null);
+    gpxPanelOpen.value = false;
+    showToast(`${formatDistance(result.distanceKm)} 왕복 코스를 만들었습니다`);
+  } catch (error) {
+    if (error?.name === 'AbortError') return;
+    console.error('GPX 자동 코스 생성 실패:', error);
+    routeError.value = error?.message || '자동 코스를 만들지 못했습니다';
+    showToast(routeError.value);
+  } finally {
+    if (routeAbortController === abortController) {
+      routeAbortController = null;
+      routeLoading.value = false;
+      gpxLoading.value = false;
+    }
+  }
+};
+
+const shareAutomaticCourse = async () => {
+  if (!automaticCourse.value || gpxSharing.value) return;
+  gpxSharing.value = true;
+  try {
+    const filename = createGpxFilename();
+    const content = buildGpx({
+      name: `모두의 음수대 ${formatDistance(automaticCourse.value.distanceKm)} 왕복 코스`,
+      coordinates: automaticCourse.value.coordinates,
+      waypoints: automaticCourse.value.stops,
+    });
+    const action = await saveOrShareGpx({ filename, content });
+    showToast(action === 'downloaded' ? 'GPX 파일을 저장했습니다' : 'GPX 공유 화면을 열었습니다');
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      console.error('GPX 저장·공유 실패:', error);
+      showToast('GPX 파일을 저장하지 못했습니다');
+    }
+  } finally {
+    gpxSharing.value = false;
+  }
+};
+
+const openGpxPanel = () => {
+  closeInfoWindows();
+  gpxPanelOpen.value = true;
 };
 
 const openNaverRoute = async (locations) => {
@@ -439,13 +556,21 @@ onUnmounted(() => {
   </div>
   <div v-if="routeLocations.length && !openInfoId" class="route-panel">
     <div class="route-summary">
-      <strong>{{ routeLocations.length === 1 ? '경로 이어하기' : `선택 경로 ${routeLocations.length}곳` }}</strong>
+      <strong v-if="automaticCourse">GPX 왕복 코스 · 음수대 {{ routeLocations.length }}곳</strong>
+      <strong v-else>{{ routeLocations.length === 1 ? '경로 이어하기' : `선택 경로 ${routeLocations.length}곳` }}</strong>
       <span v-if="routeLoading">경로 계산 중…</span>
       <span v-else-if="displayedRoute">{{ formatDistance(displayedRoute.distanceKm) }} · 도보 약 {{ displayedRoute.durationMinutes }}분</span>
       <span v-else-if="routeError">{{ routeError }}</span>
       <span v-else>{{ routeLocations.length === 1 ? '다음 음수대를 선택하세요' : '경로를 확인하세요' }}</span>
     </div>
-    <div class="route-actions">
+    <div v-if="automaticCourse" class="route-actions gpx-result-actions">
+      <button type="button" class="route-clear-btn" @click="clearRoute">초기화</button>
+      <button type="button" class="route-map-btn" :disabled="gpxSharing" @click="shareAutomaticCourse">
+        {{ gpxSharing ? '준비중' : 'GPX 저장' }}
+      </button>
+      <button type="button" class="route-show-btn" :disabled="gpxLoading" @click="generateGpxCourse(true)">다시</button>
+    </div>
+    <div v-else class="route-actions">
       <button type="button" class="route-clear-btn" @click="clearRoute">초기화</button>
       <button
         type="button"
@@ -461,6 +586,30 @@ onUnmounted(() => {
       >길찾기</button>
     </div>
   </div>
+  <button class="gpx-open-btn" type="button" @click="openGpxPanel">GPX</button>
+  <div v-if="gpxPanelOpen" class="gpx-dialog-backdrop" @click.self="gpxPanelOpen = false">
+    <section class="gpx-dialog" role="dialog" aria-modal="true" aria-labelledby="gpx-dialog-title">
+      <button class="gpx-close-btn" type="button" aria-label="닫기" @click="gpxPanelOpen = false">×</button>
+      <h2 id="gpx-dialog-title">음수대 왕복 코스 만들기</h2>
+      <p>주변 음수대를 경유하는 실제 보행 코스를 자동으로 만듭니다.</p>
+      <fieldset>
+        <legend>출발점</legend>
+        <label><input v-model="gpxOriginMode" type="radio" value="current"> 현재 위치</label>
+        <label><input v-model="gpxOriginMode" type="radio" value="center"> 지도 중심</label>
+      </fieldset>
+      <fieldset>
+        <legend>목표 거리</legend>
+        <label v-for="distance in [3, 5, 10]" :key="distance" class="distance-option">
+          <input v-model.number="gpxTargetDistance" type="radio" :value="distance">
+          <span>{{ distance }}km</span>
+        </label>
+      </fieldset>
+      <button class="gpx-generate-btn" type="button" :disabled="gpxLoading" @click="generateGpxCourse(false)">
+        {{ gpxLoading ? '코스 계산 중…' : '코스 만들기' }}
+      </button>
+      <small>실제 보행로에 따라 완성 거리는 목표와 다를 수 있습니다.</small>
+    </section>
+  </div>
   <button class="current-location-btn" type="button" title="현재 위치로 이동" @click="showCurrentLocation">
     <span></span>
   </button>
@@ -472,6 +621,23 @@ onUnmounted(() => {
 .current-location-btn { position: absolute; right: 18px; bottom: 18px; z-index: 800; width: 44px; height: 44px; border: 1px solid #c7dfe3; border-radius: 50%; background: white; box-shadow: 0 2px 7px rgba(0,0,0,.18); }
 .current-location-btn span { display: block; width: 22px; height: 22px; margin: auto; border: 3px solid #0a93a2; border-radius: 50%; position: relative; }
 .current-location-btn span::after { content: ''; position: absolute; inset: 5px; border-radius: 50%; background: #0a93a2; }
+.gpx-open-btn { position: absolute; z-index: 820; top: max(62px, calc(env(safe-area-inset-top) + 50px)); left: 16px; min-width: 58px; height: 38px; border: 0; border-radius: 19px; background: #ef3f43; color: white; font-size: 13px; font-weight: 900; box-shadow: 0 2px 8px rgba(115,18,23,.28); }
+.gpx-dialog-backdrop { position: absolute; z-index: 1100; inset: 0; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(8,40,46,.42); }
+.gpx-dialog { position: relative; width: min(390px, 100%); padding: 22px; border-radius: 18px; background: white; color: #173d44; box-shadow: 0 12px 36px rgba(0,38,45,.3); }
+.gpx-dialog h2 { margin: 0 28px 5px 0; font-size: 20px; font-weight: 900; }
+.gpx-dialog > p { margin: 0 0 17px; color: #607b80; font-size: 13px; }
+.gpx-close-btn { position: absolute; top: 10px; right: 12px; width: 34px; height: 34px; border: 0; background: transparent; color: #607b80; font-size: 28px; }
+.gpx-dialog fieldset { display: flex; gap: 9px; margin: 0 0 14px; padding: 11px; border: 1px solid #cce8ed; border-radius: 11px; }
+.gpx-dialog legend { padding: 0 5px; color: #087f8c; font-size: 12px; font-weight: 900; }
+.gpx-dialog label { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; }
+.gpx-dialog input { accent-color: #ef3f43; }
+.gpx-dialog .distance-option { flex: 1; }
+.gpx-dialog .distance-option span { display: flex; flex: 1; align-items: center; justify-content: center; height: 36px; border: 1px solid #d4e7ea; border-radius: 9px; }
+.gpx-dialog .distance-option input { position: absolute; opacity: 0; }
+.gpx-dialog .distance-option input:checked + span { border-color: #ef3f43; background: #fff1f1; color: #d9272e; }
+.gpx-generate-btn { width: 100%; height: 46px; border: 0; border-radius: 11px; background: #ef3f43; color: white; font-size: 15px; font-weight: 900; }
+.gpx-generate-btn:disabled { background: #b8c9cc; }
+.gpx-dialog small { display: block; margin-top: 9px; color: #71888d; text-align: center; font-size: 10px; }
 .route-panel { position: absolute; z-index: 850; top: max(108px, calc(env(safe-area-inset-top) + 92px)); left: 50%; display: flex; align-items: center; gap: 8px; width: min(560px, calc(100% - 24px)); box-sizing: border-box; padding: 8px 9px 8px 13px; border: 1px solid #b8dfe4; border-radius: 14px; background: rgba(255,255,255,.96); box-shadow: 0 3px 12px rgba(0,61,72,.22); transform: translateX(-50%); }
 .route-summary { display: flex; min-width: 0; flex: 1; flex-direction: column; align-items: flex-start; gap: 2px; color: #173d44; white-space: nowrap; }
 .route-summary strong { font-size: 13px; }
@@ -486,6 +652,8 @@ onUnmounted(() => {
   .route-panel { gap: 6px; padding-left: 11px; }
   .route-actions { gap: 4px; }
   .route-actions button { min-width: 48px; padding: 0 7px; font-size: 11px; }
+  .gpx-open-btn { top: max(58px, calc(env(safe-area-inset-top) + 46px)); left: 12px; }
+  .gpx-result-actions button { min-width: 44px; padding: 0 5px; }
 }
 :deep(.water-marker) { display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border: 2px solid #0a93a2; border-radius: 50% 50% 50% 8px; background: white; box-shadow: 0 2px 7px rgba(0,61,72,.32); transform: rotate(-45deg); transition: transform .15s; cursor: pointer; }
 :deep(.water-marker span) { font-size: 23px; line-height: 1; transform: rotate(45deg); }
