@@ -42,3 +42,6 @@ android/keystore.properties
 android/*.jks
 android/*.keystore
 android/app/release/
+
+# Local release packages (AAB/ZIP and release notes)
+release/

@@ -9,9 +9,13 @@ import {
 } from '@capacitor-community/admob'
 
 const TEST_BANNER_ID = 'ca-app-pub-3940256099942544/6300978111'
+const RESERVED_BANNER_HEIGHT = 60
 const isAndroidApp = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
 const liveAdsEnabled = import.meta.env.VITE_ADMOB_LIVE === 'true'
-const bannerId = import.meta.env.VITE_ADMOB_BANNER_ID || TEST_BANNER_ID
+const testAdsEnabled = import.meta.env.DEV || import.meta.env.VITE_ADMOB_TEST === 'true'
+const configuredBannerId = import.meta.env.VITE_ADMOB_BANNER_ID
+const bannerId = liveAdsEnabled ? configuredBannerId : TEST_BANNER_ID
+const adsEnabled = testAdsEnabled || (liveAdsEnabled && Boolean(configuredBannerId))
 
 let initialized = false
 
@@ -20,11 +24,15 @@ const setBannerSpace = (height = 0) => {
 }
 
 export const initializeAdMob = async () => {
-  if (!isAndroidApp || initialized) return
+  if (!isAndroidApp) return
+
+  // 광고가 늦게 로드되거나 아직 운영 ID가 없어도 하단 UI가 광고 영역과 겹치지 않게 한다.
+  setBannerSpace(RESERVED_BANNER_HEIGHT)
+  if (initialized || !adsEnabled) return
 
   try {
     await AdMob.initialize({
-      initializeForTesting: !liveAdsEnabled,
+      initializeForTesting: testAdsEnabled,
       maxAdContentRating: MaxAdContentRating.General,
     })
 
@@ -36,16 +44,19 @@ export const initializeAdMob = async () => {
     if (consentInfo.status === AdmobConsentStatus.REQUIRED) return
 
     await AdMob.addListener(BannerAdPluginEvents.SizeChanged, ({ height }) => setBannerSpace(height))
-    await AdMob.addListener(BannerAdPluginEvents.FailedToLoad, () => setBannerSpace())
+    await AdMob.addListener(
+      BannerAdPluginEvents.FailedToLoad,
+      () => setBannerSpace(RESERVED_BANNER_HEIGHT),
+    )
     await AdMob.showBanner({
       adId: bannerId,
       adSize: BannerAdSize.ADAPTIVE_BANNER,
       position: BannerAdPosition.BOTTOM_CENTER,
       margin: 0,
-      isTesting: !liveAdsEnabled,
+      isTesting: testAdsEnabled,
     })
     initialized = true
   } catch {
-    setBannerSpace()
+    setBannerSpace(RESERVED_BANNER_HEIGHT)
   }
 }

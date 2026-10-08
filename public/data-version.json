@@ -1,6 +1,9 @@
 {
-  "v": 20260912,
-  "updatedAt": "2026-09-12T00:09:56.881Z",
-  "count": 1684,
-  "source": "서울시 공원음수대 정보 조회 (TbViewGisArisu)"
+  "v": 20260915,
+  "updatedAt": "2026-09-15T00:29:22.749Z",
+  "count": 1928,
+  "officialCount": 1685,
+  "openStreetMapCount": 243,
+  "parkLevelCount": 1,
+  "source": "서울시 공원음수대 정보 + 지자체 공식 공원 현황 + OpenStreetMap 수도권 식수 가능 지점"
 }

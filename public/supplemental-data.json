@@ -1,0 +1,28 @@
+{
+  "locations": [
+    {
+      "id": "official-nyj-donong-citizen-park",
+      "title": "도농시민공원 음수대 2개소",
+      "parkName": "도농시민공원 도농한강공원 도농체육공원 왕숙천공원",
+      "latitude": 37.6088391424,
+      "longitude": 127.1489383033,
+      "address": "경기도 남양주시 다산동 4321-10",
+      "newAddress": null,
+      "detailLocation": "공원 내 음수대 2개소 · 개별 위치 미공개",
+      "office": "남양주시 하천공원관리과",
+      "source": "남양주시 공식 공원 현황",
+      "sourceUrl": "https://nyj.go.kr/www/contents.do?key=3178",
+      "approximate": true,
+      "facilityCount": 2,
+      "verifiedAt": "2026-09-15"
+    }
+  ],
+  "overrides": {
+    "osm-node-9918482641": { "title": "구리한강시민공원 음수대 1", "parkName": "구리한강시민공원 가족힐링캠핑장" },
+    "osm-node-9918587182": { "title": "구리한강시민공원 음수대 2", "parkName": "구리한강시민공원 가족힐링캠핑장" },
+    "osm-node-9976399409": { "title": "구리한강시민공원 음수대 3", "parkName": "구리한강시민공원 가족힐링캠핑장" },
+    "osm-node-13282264247": { "title": "구리한강시민공원 음수대 4", "parkName": "구리한강시민공원 가족힐링캠핑장" },
+    "osm-node-13282264248": { "title": "구리한강시민공원 음수대 5", "parkName": "구리한강시민공원 가족힐링캠핑장" },
+    "osm-node-13282401400": { "title": "구리한강시민공원 음수대 6", "parkName": "구리한강시민공원 가족힐링캠핑장" }
+  }
+}

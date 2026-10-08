@@ -12,7 +12,10 @@ createApp(App)
     })
     .mount("#app");
 
-// 운영 웹 배포 주소가 준비된 뒤 환경변수로 명시적으로 켠 경우에만 자동 업데이트한다.
-if (import.meta.env.VITE_LIVE_UPDATE_ENABLED === 'true') {
-    import('./services/liveUpdate.js').then(({ startLiveUpdate }) => startLiveUpdate());
+// 명시적으로 false로 끄지 않는 한 네이티브 앱에서 OTA 업데이트를 확인한다.
+// 웹에서는 startLiveUpdate 내부의 플랫폼 검사에서 즉시 종료된다.
+if (import.meta.env.VITE_LIVE_UPDATE_ENABLED !== 'false') {
+    import('./services/liveUpdate.js').then(({ installLiveUpdateChecks }) => {
+        installLiveUpdateChecks();
+    });
 }

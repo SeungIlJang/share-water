@@ -8,7 +8,7 @@ import { createWriteStream } from 'node:fs';
 const root = process.cwd();
 const distDir = join(root, 'dist');
 const updateDir = join(distDir, 'live-update');
-const publicOrigin = (process.env.LIVE_UPDATE_ORIGIN || 'https://share-water.onrender.com').replace(/\/$/, '');
+const publicOrigin = (process.env.LIVE_UPDATE_ORIGIN || 'https://share-water-ota.pages.dev').replace(/\/$/, '');
 
 const listFiles = async (dir) => {
   const entries = await readdir(dir, { withFileTypes: true });

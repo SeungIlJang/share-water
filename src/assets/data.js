@@ -8,6 +8,7 @@
 const BASE = import.meta.env.BASE_URL;
 const LOCAL_DATA = `${BASE}data.json`;
 const LOCAL_VER = `${BASE}data-version.json`;
+const LOCAL_SUPPLEMENT = `${BASE}supplemental-data.json`;
 const REMOTE_DATA = import.meta.env.VITE_DATA_URL || '';
 const REMOTE_VER = REMOTE_DATA.replace(/data\.json(\?.*)?$/, 'data-version.json');
 
@@ -30,6 +31,7 @@ const VER_TIMEOUT = 2500;   // 원격 버전 확인: 느리면 2.5초 후 로컬
 const DATA_TIMEOUT = 15000; // 원격 데이터 다운로드: 최대 15초
 
 async function loadDrinkingWater() {
+  let baseData;
   // 1) 원격이 로컬보다 최신이면 원격 사용 (원격이 느리면 타임아웃 → 로컬)
   if (REMOTE_DATA && REMOTE_VER !== REMOTE_DATA) {
     try {
@@ -39,19 +41,34 @@ async function loadDrinkingWater() {
       ]);
       if (ver(remoteVer) > ver(localVer)) {
         console.info(`[data] 원격 최신본 사용 (v${ver(remoteVer)} > v${ver(localVer)})`);
-        return await fetchJson(REMOTE_DATA, DATA_TIMEOUT);
+        baseData = await fetchJson(REMOTE_DATA, DATA_TIMEOUT);
+      } else {
+        console.info('[data] 로컬 번들이 최신 → 로컬 사용');
       }
-      console.info('[data] 로컬 번들이 최신 → 로컬 사용');
     } catch (e) {
       console.warn('[data] 원격 확인 실패/지연 → 로컬 번들 사용:', e?.message);
     }
   }
   // 2) 로컬 번들
+  if (!baseData) {
+    try {
+      baseData = await fetchJson(LOCAL_DATA);
+    } catch (e) {
+      console.error('[data] 로컬 데이터 로드 실패:', e?.message);
+      baseData = [];
+    }
+  }
+
+  // 3) 개별 좌표가 없는 공식 공원 정보와 검증된 명칭 보강을 항상 적용한다.
   try {
-    return await fetchJson(LOCAL_DATA);
+    const supplement = await fetchJson(LOCAL_SUPPLEMENT);
+    const overrides = supplement?.overrides || {};
+    const enriched = baseData.map((item) => ({ ...item, ...(overrides[item.id] || {}) }));
+    const existingIds = new Set(enriched.map(({ id }) => id));
+    return [...enriched, ...(supplement?.locations || []).filter(({ id }) => !existingIds.has(id))];
   } catch (e) {
-    console.error('[data] 로컬 데이터 로드 실패:', e?.message);
-    return [];
+    console.warn('[data] 보강 데이터 로드 실패:', e?.message);
+    return baseData;
   }
 }
 
