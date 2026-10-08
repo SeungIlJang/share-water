@@ -11,6 +11,7 @@ import { fetchWalkingDistances, fetchWalkingRoute } from '@/utils/walkingRoute.j
 import { createAutomaticCourse } from '@/utils/coursePlanner.js';
 import { buildGpx, createGpxFilename } from '@/utils/gpx.js';
 import { saveOrShareGpx } from '@/utils/gpxShare.js';
+import { visibleAreaRatio } from '@/utils/visibility.js';
 
 const props = defineProps({
   locations: { type: Array, required: true },
@@ -37,11 +38,16 @@ const gpxTargetDistance = ref(5);
 const automaticCourse = ref(null);
 const gpxLoading = ref(false);
 const gpxSharing = ref(false);
+const routeFocusMode = ref(false);
 let mapDomElement;
 let mapDomClickHandler;
 let apiTimer;
 let routePolyline;
 let routeAbortController;
+let retainedInfoLocation;
+let mapDragging = false;
+let suppressMapTapUntil = 0;
+let visibilityFrame;
 
 const esc = (value) => String(value ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -114,17 +120,24 @@ const updateSelectedStyles = (id) => {
 
 const closeInfoWindows = () => {
   Object.values(infoWindows.value).forEach((info) => info.close());
+  retainedInfoLocation = null;
   updateSelectedStyles(null);
 };
 
-const showInfoWindow = (id) => {
+const findLocation = (id) => props.locations.find((item) => String(item.id) === String(id))
+  || routeLocations.value.find((item) => String(item.id) === String(id))
+  || (String(retainedInfoLocation?.id) === String(id) ? retainedInfoLocation : null);
+
+const showInfoWindow = (id, moveToMarker = true) => {
+  const location = findLocation(id);
   closeInfoWindows();
   const marker = markers.value[id];
   const info = infoWindows.value[id];
   if (!marker || !info) return;
+  retainedInfoLocation = location;
   info.open(map.value, marker);
   updateSelectedStyles(id);
-  smoothMoveMap(marker.getPosition());
+  if (moveToMarker) smoothMoveMap(marker.getPosition());
 };
 
 const toggleInfoWindow = (id) => {
@@ -159,13 +172,22 @@ const showCurrentLocation = async () => {
 };
 
 const createMarkers = () => {
+  const activeInfoId = openInfoId.value;
+  const activeInfoLocation = activeInfoId ? findLocation(activeInfoId) : null;
   Object.values(markers.value).forEach((marker) => marker.setMap(null));
   Object.values(infoWindows.value).forEach((info) => info.close());
   markers.value = {};
   infoWindows.value = {};
   if (!map.value) return;
 
-  props.locations.forEach((location) => {
+  const baseLocations = routeFocusMode.value ? routeLocations.value : props.locations;
+  const markerLocations = [...baseLocations];
+  if (
+    activeInfoLocation
+    && !markerLocations.some(({ id }) => String(id) === String(activeInfoLocation.id))
+  ) markerLocations.push(activeInfoLocation);
+
+  markerLocations.forEach((location) => {
     if (!Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)) return;
     const marker = new naver.maps.Marker({
       position: new naver.maps.LatLng(location.latitude, location.longitude),
@@ -192,7 +214,8 @@ const createMarkers = () => {
     infoWindows.value[location.id] = info;
   });
 
-  if (props.selectedId && markers.value[props.selectedId]) showInfoWindow(props.selectedId);
+  if (activeInfoId && markers.value[activeInfoId]) showInfoWindow(activeInfoId, false);
+  else if (props.selectedId && markers.value[props.selectedId]) showInfoWindow(props.selectedId);
   renderCurrentLocation();
 };
 
@@ -203,9 +226,24 @@ const emitRegionChanged = () => {
 };
 
 const handleMapTap = () => {
+  if (mapDragging || Date.now() < suppressMapTapUntil) return;
   closeInfoWindows();
   document.activeElement?.blur?.();
   emit('map-tap');
+};
+
+const checkInfoWindowVisibility = () => {
+  cancelAnimationFrame(visibilityFrame);
+  visibilityFrame = requestAnimationFrame(() => {
+    if (!openInfoId.value || !mapDomElement) return;
+    const infoElement = mapDomElement.querySelector('.info-window');
+    if (!infoElement) return;
+    const ratio = visibleAreaRatio(
+      infoElement.getBoundingClientRect(),
+      mapDomElement.getBoundingClientRect(),
+    );
+    if (ratio <= 0.1) closeInfoWindows();
+  });
 };
 
 const initMap = async () => {
@@ -222,8 +260,18 @@ const initMap = async () => {
     zoom: 15,
   });
   naver.maps.Event.addListener(map.value, 'click', handleMapTap);
-  naver.maps.Event.addListener(map.value, 'dragend', emitRegionChanged);
-  naver.maps.Event.addListener(map.value, 'zoom_changed', emitRegionChanged);
+  naver.maps.Event.addListener(map.value, 'dragstart', () => { mapDragging = true; });
+  naver.maps.Event.addListener(map.value, 'dragend', () => {
+    mapDragging = false;
+    suppressMapTapUntil = Date.now() + 250;
+    emitRegionChanged();
+    checkInfoWindowVisibility();
+  });
+  naver.maps.Event.addListener(map.value, 'bounds_changed', checkInfoWindowVisibility);
+  naver.maps.Event.addListener(map.value, 'zoom_changed', () => {
+    emitRegionChanged();
+    checkInfoWindowVisibility();
+  });
 
   mapDomElement = document.getElementById('map');
   mapDomClickHandler = (event) => {
@@ -250,7 +298,7 @@ const showToast = (message) => {
 const refreshOpenInfoWindow = () => {
   const id = openInfoId.value;
   if (!id || !infoWindows.value[id]) return;
-  const location = props.locations.find((item) => String(item.id) === String(id));
+  const location = findLocation(id);
   if (location) infoWindows.value[id].setContent(buildInfoContent(location));
 };
 
@@ -270,6 +318,7 @@ const toggleRouteLocation = (id) => {
   }
   updateSelectedStyles(openInfoId.value);
   refreshOpenInfoWindow();
+  createMarkers();
 };
 
 const clearRoute = () => {
@@ -283,8 +332,10 @@ const clearRoute = () => {
   routeError.value = '';
   automaticCourse.value = null;
   gpxLoading.value = false;
+  routeFocusMode.value = false;
   updateSelectedStyles(openInfoId.value);
   refreshOpenInfoWindow();
+  createMarkers();
 };
 
 const clearDisplayedRoute = () => {
@@ -296,6 +347,7 @@ const clearDisplayedRoute = () => {
   routeLoading.value = false;
   routeError.value = '';
   automaticCourse.value = null;
+  routeFocusMode.value = false;
 };
 
 const fitRouteOnMap = (coordinates) => {
@@ -346,11 +398,15 @@ const showSelectedRoute = async () => {
     if (selectedIds !== routeLocations.value.map(({ id }) => String(id)).join('|')) return;
 
     drawRoute(result);
+    routeFocusMode.value = true;
+    createMarkers();
+    return result;
   } catch (error) {
     if (error?.name === 'AbortError') return;
     console.error('보행 경로 조회 실패:', error);
     routeError.value = '경로를 불러오지 못했습니다';
     showToast('보행 경로를 불러오지 못했습니다. 다시 시도해주세요');
+    return null;
   } finally {
     if (routeAbortController === abortController) {
       routeLoading.value = false;
@@ -415,7 +471,8 @@ const generateGpxCourse = async (reroll = false) => {
     routeLocations.value = result.stops.map((stop) => ({ ...stop }));
     automaticCourse.value = result;
     drawRoute(result, '#ef3f43');
-    updateSelectedStyles(null);
+    routeFocusMode.value = true;
+    createMarkers();
     gpxPanelOpen.value = false;
     showToast(`${formatDistance(result.distanceKm)} 왕복 코스를 만들었습니다`);
   } catch (error) {
@@ -432,15 +489,15 @@ const generateGpxCourse = async (reroll = false) => {
   }
 };
 
-const shareAutomaticCourse = async () => {
-  if (!automaticCourse.value || gpxSharing.value) return;
+const shareRouteGpx = async (route, waypoints, name) => {
+  if (!route || gpxSharing.value) return;
   gpxSharing.value = true;
   try {
     const filename = createGpxFilename();
     const content = buildGpx({
-      name: `모두의 음수대 ${formatDistance(automaticCourse.value.distanceKm)} 왕복 코스`,
-      coordinates: automaticCourse.value.coordinates,
-      waypoints: automaticCourse.value.stops,
+      name,
+      coordinates: route.coordinates,
+      waypoints,
     });
     const action = await saveOrShareGpx({ filename, content });
     showToast(action === 'downloaded' ? 'GPX 파일을 저장했습니다' : 'GPX 공유 화면을 열었습니다');
@@ -452,6 +509,26 @@ const shareAutomaticCourse = async () => {
   } finally {
     gpxSharing.value = false;
   }
+};
+
+const shareAutomaticCourse = () => shareRouteGpx(
+  automaticCourse.value,
+  automaticCourse.value?.stops || [],
+  `모두의 음수대 ${formatDistance(automaticCourse.value?.distanceKm || 0)} 왕복 코스`,
+);
+
+const shareSelectedRoute = async () => {
+  if (routeLocations.value.length < 2) {
+    showToast('음수대를 2곳 이상 선택해주세요');
+    return;
+  }
+  const route = displayedRoute.value || await showSelectedRoute();
+  if (!route) return;
+  await shareRouteGpx(
+    route,
+    routeLocations.value,
+    `모두의 음수대 ${formatDistance(route.distanceKm)} 선택 경로`,
+  );
 };
 
 const openGpxPanel = () => {
@@ -542,6 +619,7 @@ onMounted(() => {
 onUnmounted(() => {
   clearInterval(apiTimer);
   routeAbortController?.abort();
+  cancelAnimationFrame(visibilityFrame);
   routePolyline?.setMap(null);
   mapDomElement?.removeEventListener('click', mapDomClickHandler, true);
   delete window.__swToggleRoute;
@@ -570,7 +648,7 @@ onUnmounted(() => {
       </button>
       <button type="button" class="route-show-btn" :disabled="gpxLoading" @click="generateGpxCourse(true)">다시</button>
     </div>
-    <div v-else class="route-actions">
+    <div v-else class="route-actions manual-route-actions">
       <button type="button" class="route-clear-btn" @click="clearRoute">초기화</button>
       <button
         type="button"
@@ -584,6 +662,12 @@ onUnmounted(() => {
         :disabled="routeLocations.length < 2"
         @click="navigateSelectedRoute"
       >길찾기</button>
+      <button
+        type="button"
+        class="route-gpx-btn"
+        :disabled="routeLocations.length < 2 || routeLoading || gpxSharing"
+        @click="shareSelectedRoute"
+      >{{ gpxSharing ? '준비중' : 'GPX' }}</button>
     </div>
   </div>
   <button class="gpx-open-btn" type="button" @click="openGpxPanel">GPX</button>
@@ -647,11 +731,13 @@ onUnmounted(() => {
 .route-clear-btn { border: 1px solid #bfdde1; background: white; color: #607b80; }
 .route-map-btn { border: 1px solid #087f8c; background: white; color: #087f8c; }
 .route-show-btn { border: 1px solid #087f8c; background: #087f8c; color: white; }
+.route-gpx-btn { border: 1px solid #ef3f43; background: #ef3f43; color: white; }
 .route-actions button:disabled { border-color: #b8c9cc; background: #b8c9cc; color: white; cursor: not-allowed; }
 @media (max-width: 430px) {
   .route-panel { gap: 6px; padding-left: 11px; }
   .route-actions { gap: 4px; }
   .route-actions button { min-width: 48px; padding: 0 7px; font-size: 11px; }
+  .manual-route-actions button { min-width: 42px; padding: 0 5px; }
   .gpx-open-btn { top: max(58px, calc(env(safe-area-inset-top) + 46px)); left: 12px; }
   .gpx-result-actions button { min-width: 44px; padding: 0 5px; }
 }
