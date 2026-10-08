@@ -9,11 +9,12 @@ import {
 } from '@capacitor-community/admob'
 
 const TEST_BANNER_ID = 'ca-app-pub-3940256099942544/6300978111'
+const PRODUCTION_BANNER_ID = 'ca-app-pub-9017259597860535/9371049904'
 const RESERVED_BANNER_HEIGHT = 60
 const isAndroidApp = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
-const liveAdsEnabled = import.meta.env.VITE_ADMOB_LIVE === 'true'
+const liveAdsEnabled = import.meta.env.VITE_ADMOB_LIVE !== 'false'
 const testAdsEnabled = import.meta.env.DEV || import.meta.env.VITE_ADMOB_TEST === 'true'
-const configuredBannerId = import.meta.env.VITE_ADMOB_BANNER_ID
+const configuredBannerId = import.meta.env.VITE_ADMOB_BANNER_ID || PRODUCTION_BANNER_ID
 const bannerId = liveAdsEnabled ? configuredBannerId : TEST_BANNER_ID
 const adsEnabled = testAdsEnabled || (liveAdsEnabled && Boolean(configuredBannerId))
 

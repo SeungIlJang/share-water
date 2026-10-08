@@ -6,7 +6,7 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
-def defaultAdMobAppId = 'ca-app-pub-3940256099942544~3347511713'
+def defaultAdMobAppId = 'ca-app-pub-9017259597860535~8100356958'
 def configuredAdMobAppId = System.getenv('ADMOB_APP_ID') ?: project.findProperty('ADMOB_APP_ID') ?: defaultAdMobAppId
 
 android {
@@ -16,8 +16,8 @@ android {
         applicationId "com.sharewater.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 6
-        versionName "1.5"
+        versionCode 7
+        versionName "1.6"
         manifestPlaceholders = [admobAppId: configuredAdMobAppId]
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
