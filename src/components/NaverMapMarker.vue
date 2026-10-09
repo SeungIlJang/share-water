@@ -10,7 +10,7 @@ import {
 import { fetchWalkingDistances, fetchWalkingRoute } from '@/utils/walkingRoute.js';
 import { createAutomaticCourse } from '@/utils/coursePlanner.js';
 import { buildGpx, createGpxFilename } from '@/utils/gpx.js';
-import { saveOrShareGpx } from '@/utils/gpxShare.js';
+import { gpxSaveErrorMessage, saveOrShareGpx } from '@/utils/gpxShare.js';
 import { visibleAreaRatio } from '@/utils/visibility.js';
 
 const props = defineProps({
@@ -502,10 +502,11 @@ const shareRouteGpx = async (route, waypoints, name) => {
     const action = await saveOrShareGpx({ filename, content });
     showToast(action === 'downloaded' ? 'GPX 파일을 저장했습니다' : 'GPX 공유 화면을 열었습니다');
   } catch (error) {
-    if (error?.name !== 'AbortError') {
+    const message = gpxSaveErrorMessage(error);
+    if (message !== 'GPX 저장을 취소했습니다') {
       console.error('GPX 저장·공유 실패:', error);
-      showToast('GPX 파일을 저장하지 못했습니다');
     }
+    showToast(message);
   } finally {
     gpxSharing.value = false;
   }
