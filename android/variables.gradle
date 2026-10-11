@@ -1,6 +1,6 @@
 ext {
-    // 라이브 업데이트 플러그인과 최신 Google Play Services의 최소 요구 버전
-    minSdkVersion = 23
+    // Google Play 자동 보호 기능의 최소 요구 버전
+    minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36
     androidxActivityVersion = '1.8.0'
