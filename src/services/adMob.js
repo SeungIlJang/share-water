@@ -37,12 +37,19 @@ export const initializeAdMob = async () => {
       maxAdContentRating: MaxAdContentRating.General,
     })
 
-    let consentInfo = await AdMob.requestConsentInfo()
-    if (consentInfo.isConsentFormAvailable && consentInfo.status === AdmobConsentStatus.REQUIRED) {
-      consentInfo = await AdMob.showConsentForm()
+    // 동의 메시지가 설정되지 않은 계정에서는 requestConsentInfo()가 예외를 던진다.
+    // 동의 조회 실패가 배너 노출 자체를 막지 않도록 분리해서 처리한다.
+    let consentInfo = null
+    try {
+      consentInfo = await AdMob.requestConsentInfo()
+      if (consentInfo.isConsentFormAvailable && consentInfo.status === AdmobConsentStatus.REQUIRED) {
+        consentInfo = await AdMob.showConsentForm()
+      }
+    } catch (error) {
+      console.warn('[admob] 동의 정보 조회 실패, 배너 요청은 계속합니다:', error)
     }
 
-    if (consentInfo.status === AdmobConsentStatus.REQUIRED) return
+    if (consentInfo && consentInfo.status === AdmobConsentStatus.REQUIRED) return
 
     await AdMob.addListener(BannerAdPluginEvents.SizeChanged, ({ height }) => setBannerSpace(height))
     await AdMob.addListener(
