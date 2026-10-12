@@ -20,14 +20,30 @@ const adsEnabled = testAdsEnabled || (liveAdsEnabled && Boolean(configuredBanner
 
 let initialized = false
 
+// 제스처 바(홈 인디케이터) 높이. viewport-fit=cover 가 있어야 값이 잡힌다.
+const readBottomInset = () => {
+  const probe = document.createElement('div')
+  probe.style.cssText =
+    'position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);' +
+    'visibility:hidden;pointer-events:none'
+  document.body.appendChild(probe)
+  const inset = Math.round(probe.getBoundingClientRect().height)
+  probe.remove()
+  return inset
+}
+
+let bottomInset = 0
+
 const setBannerSpace = (height = 0) => {
-  document.documentElement.style.setProperty('--admob-banner-height', `${Math.max(0, height)}px`)
+  const total = height > 0 ? height + bottomInset : 0
+  document.documentElement.style.setProperty('--admob-banner-height', `${Math.max(0, total)}px`)
 }
 
 export const initializeAdMob = async () => {
   if (!isAndroidApp) return
 
   // 광고가 늦게 로드되거나 아직 운영 ID가 없어도 하단 UI가 광고 영역과 겹치지 않게 한다.
+  bottomInset = readBottomInset()
   setBannerSpace(RESERVED_BANNER_HEIGHT)
   if (initialized || !adsEnabled) return
 
@@ -60,7 +76,7 @@ export const initializeAdMob = async () => {
       adId: bannerId,
       adSize: BannerAdSize.ADAPTIVE_BANNER,
       position: BannerAdPosition.BOTTOM_CENTER,
-      margin: 0,
+      margin: bottomInset,
       isTesting: testAdsEnabled,
     })
     initialized = true
