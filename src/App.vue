@@ -7,6 +7,7 @@ import { getCurrentPosition } from '@/utils/geolocation.js';
 import { initializeAdMob } from '@/services/adMob.js';
 import { DEFAULT_SEARCH_RADIUS_METERS, SEARCH_RADIUS_OPTIONS } from '@/config.js';
 import { getDistanceKm, locationsWithinRadius } from '@/utils/distance.js';
+import { createCustomWater, loadCustomWater, saveCustomWater } from '@/utils/customWater.js';
 
 const DEFAULT_POSITION = { latitude: 37.5297, longitude: 126.9647 };
 const configuredRadius = Number(import.meta.env.VITE_DEFAULT_RADIUS);
@@ -14,6 +15,50 @@ const DEFAULT_RADIUS = configuredRadius > 0 ? configuredRadius : DEFAULT_SEARCH_
 const RADIUS_OPTIONS = SEARCH_RADIUS_OPTIONS;
 
 const locations = ref([]);
+const customLocations = ref(loadCustomWater());
+const addWaterPosition = ref(null);
+const addWaterName = ref('');
+const addWaterMemo = ref('');
+const addWaterError = ref('');
+const deleteWaterId = ref(null);
+
+const openAddWater = (position) => {
+  addWaterPosition.value = position;
+  addWaterName.value = '';
+  addWaterMemo.value = '';
+  addWaterError.value = '';
+};
+
+const addWater = () => {
+  try {
+    const item = createCustomWater({ ...addWaterPosition.value, title: addWaterName.value, detailLocation: addWaterMemo.value });
+    const updated = [...customLocations.value, item];
+    saveCustomWater(updated);
+    customLocations.value = updated;
+    locations.value = [...locations.value, item];
+    mode.value = 'near';
+    searchQuery.value = '';
+    searchContextLabel.value = '직접 추가한 위치';
+    searchOrigin.value = { latitude: item.latitude, longitude: item.longitude };
+    centerLocation.value = { ...searchOrigin.value };
+    selectedId.value = item.id;
+    addWaterPosition.value = null;
+    setSheetCollapsed(false);
+  } catch (error) { addWaterError.value = error.message; }
+};
+
+const deleteWater = () => {
+  try {
+    const id = deleteWaterId.value;
+    const updated = customLocations.value.filter((item) => item.id !== id);
+    saveCustomWater(updated);
+    customLocations.value = updated;
+    locations.value = locations.value.filter((item) => item.id !== id);
+    if (selectedId.value === id) selectedId.value = null;
+    deleteWaterId.value = null;
+    addWaterError.value = '';
+  } catch (error) { addWaterError.value = error.message; }
+};
 const selectedId = ref(null);
 const searchQuery = ref('');
 const isLoading = ref(false);
@@ -23,6 +68,37 @@ const searchOrigin = ref(null);
 const searchRadius = ref(DEFAULT_RADIUS);
 const mode = ref('near');
 const sheetExpanded = ref(false);
+const sheetCollapsed = ref(false);
+let sheetPointer = null;
+let suppressSheetClickUntil = 0;
+
+const setSheetCollapsed = (collapsed) => {
+  sheetCollapsed.value = collapsed;
+  sheetExpanded.value = false;
+};
+
+const startSheetGesture = (event) => {
+  if (!event.isPrimary || event.button !== 0) return;
+  sheetPointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  event.currentTarget.setPointerCapture(event.pointerId);
+};
+
+const endSheetGesture = (event) => {
+  if (!sheetPointer || sheetPointer.id !== event.pointerId) return;
+  const dx = event.clientX - sheetPointer.x;
+  const dy = event.clientY - sheetPointer.y;
+  sheetPointer = null;
+  // 드래그 뒤 발생하는 click이 접힘 상태를 다시 바꾸지 않게 한다.
+  if (Math.hypot(dx, dy) > 8) suppressSheetClickUntil = Date.now() + 500;
+  if (Math.abs(dy) < 32 || Math.abs(dy) < Math.abs(dx) * 1.25) return;
+  setSheetCollapsed(dy > 0);
+};
+
+const toggleSheet = (event) => {
+  if (event.detail !== 0 && Date.now() < suppressSheetClickUntil) return;
+  if (sheetCollapsed.value) setSheetCollapsed(false);
+  else sheetExpanded.value = !sheetExpanded.value;
+};
 const searchContextLabel = ref('');
 const mapInfoOpen = ref(false);
 const updateMessage = ref('');
@@ -90,10 +166,10 @@ const searchStatus = computed(() => {
 const fetchLocations = async () => {
   isLoading.value = true;
   try {
-    locations.value = await drinkingWaterData;
+    locations.value = [...await drinkingWaterData, ...customLocations.value];
   } catch (error) {
     console.error('음수대 데이터 로드 실패:', error);
-    locations.value = [];
+    locations.value = [...customLocations.value];
   } finally {
     isLoading.value = false;
   }
@@ -193,19 +269,28 @@ onUnmounted(() => {
         @region-changed="handleRegionChanged"
         @map-tap="sheetExpanded = false; selectedId = null"
         @info-open-changed="mapInfoOpen = $event"
+        @add-water="openAddWater"
       />
       <div v-if="!mapInfoOpen" class="brand-badge"><span>💧</span> 모두의 음수대</div>
     </section>
 
-    <section class="bottom-container" :class="{ expanded: sheetExpanded }">
+    <section class="bottom-container" :class="{ expanded: sheetExpanded, collapsed: sheetCollapsed }">
       <button
         class="sheet-handle"
         type="button"
-        :aria-label="sheetExpanded ? '목록 접기' : '목록 펼치기'"
-        @click="sheetExpanded = !sheetExpanded"
-      ><span></span></button>
+        :aria-label="sheetCollapsed ? '검색·목록 다시 열기' : (sheetExpanded ? '목록 기본 높이로 줄이기' : '목록 크게 펼치기')"
+        :aria-expanded="!sheetCollapsed"
+        aria-controls="water-search water-results"
+        @pointerdown="startSheetGesture"
+        @pointerup="endSheetGesture"
+        @pointercancel="sheetPointer = null"
+        @lostpointercapture="sheetPointer = null"
+        @click="toggleSheet"
+        @keydown.arrowdown.prevent="setSheetCollapsed(true)"
+        @keydown.arrowup.prevent="setSheetCollapsed(false)"
+      ><span></span><small v-if="sheetCollapsed">검색·목록 열기</small></button>
 
-      <div class="search-container">
+      <div id="water-search" class="search-container">
         <input
           v-model="searchQuery"
           class="search-input"
@@ -273,7 +358,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="list-scroll">
+      <div id="water-results" class="list-scroll">
         <ul v-if="!isLoading && displayedLocations.length">
           <li
             v-for="location in displayedLocations"
@@ -291,12 +376,35 @@ onUnmounted(() => {
             <p v-if="location.detailLocation" class="detail">💧 {{ location.detailLocation }}</p>
             <p v-if="location.approximate" class="approximate-notice">⚠ 공원 대표 위치 · 개별 음수대 좌표 미확인</p>
             <p>{{ location.newAddress || location.address }}</p>
+            <div v-if="location.custom" class="custom-water-actions">
+              <small>직접 추가 · 내 기기 저장</small>
+              <button type="button" @click.stop="deleteWaterId = location.id; addWaterError = ''">삭제</button>
+            </div>
           </li>
         </ul>
         <div v-else-if="isLoading" class="empty">음수대 정보를 불러오는 중입니다...</div>
         <div v-else class="empty">조건에 맞는 음수대가 없습니다.</div>
       </div>
     </section>
+    <div v-if="addWaterPosition" class="water-dialog-backdrop" @click.self="addWaterPosition = null" @keydown.esc="addWaterPosition = null">
+      <form class="water-dialog" role="dialog" aria-modal="true" aria-labelledby="add-water-title" @submit.prevent="addWater">
+        <h2 id="add-water-title">이 위치에 음수대 추가</h2>
+        <p>직접 추가한 장소는 이 기기에만 저장됩니다.<br>앱 데이터 삭제 시 함께 삭제됩니다.</p>
+        <small>{{ addWaterPosition.latitude.toFixed(6) }}, {{ addWaterPosition.longitude.toFixed(6) }}</small>
+        <label>음수대 이름<input v-model="addWaterName" required maxlength="80" placeholder="예: 한강 산책로 음수대"></label>
+        <label>위치 메모 (선택)<textarea v-model="addWaterMemo" maxlength="200" rows="2" placeholder="예: 화장실 옆, 자전거길 입구"></textarea></label>
+        <p v-if="addWaterError" class="water-form-error" role="alert">{{ addWaterError }}</p>
+        <div class="water-dialog-actions"><button type="button" @click="addWaterPosition = null">취소</button><button class="primary" type="submit">추가</button></div>
+      </form>
+    </div>
+    <div v-if="deleteWaterId" class="water-dialog-backdrop" @click.self="deleteWaterId = null" @keydown.esc="deleteWaterId = null">
+      <section class="water-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-water-title">
+        <h2 id="delete-water-title">직접 추가한 음수대를 삭제할까요?</h2>
+        <p>공공데이터의 음수대는 변경되지 않습니다.</p>
+        <p v-if="addWaterError" class="water-form-error" role="alert">{{ addWaterError }}</p>
+        <div class="water-dialog-actions"><button type="button" @click="deleteWaterId = null">취소</button><button class="primary" type="button" @click="deleteWater">삭제</button></div>
+      </section>
+    </div>
   </main>
 </template>
 
@@ -334,6 +442,18 @@ ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr))
 .location-item .approximate-notice { color: #b35b19; font-weight: 700; }
 .distance-badge { flex-shrink: 0; padding: 2px 8px; border-radius: 12px; background: #0a93a2; color: white; font-size: 11px; font-weight: 700; }
 .empty { padding: 28px 12px; color: #71898e; text-align: center; }
+.custom-water-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; color: #087f8c; }
+.custom-water-actions button { padding: 5px 10px; border: 1px solid #cce8ed; border-radius: 8px; background: white; color: #a13f37; }
+.water-dialog-backdrop { position: fixed; inset: 0; z-index: 9500; display: flex; align-items: center; justify-content: center; padding: 18px; background: #16333d80; }
+.water-dialog { width: min(400px, 100%); max-height: 85dvh; overflow-y: auto; padding: 22px; border-radius: 16px; background: white; box-shadow: 0 5px 25px #16333d40; }
+.water-dialog h2 { margin: 0 0 10px; font-size: 19px; }
+.water-dialog p, .water-dialog small { color: #52777e; font-size: 13px; }
+.water-dialog label { display: flex; flex-direction: column; gap: 6px; margin-top: 15px; font-size: 14px; }
+.water-dialog input, .water-dialog textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #b7dce2; border-radius: 8px; font: inherit; user-select: text; }
+.water-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.water-dialog-actions button { min-height: 44px; padding: 8px 20px; border: 1px solid #b7dce2; border-radius: 8px; background: white; color: #087f8c; font-weight: 700; }
+.water-dialog-actions .primary { background: #087f8c; color: white; }
+.water-dialog .water-form-error { color: #b33a30; }
 
 .update-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(238,248,251,.94); backdrop-filter: blur(3px); }
 .update-card { min-width: 220px; display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 27px 24px; border-radius: 16px; background: white; color: #16333d; box-shadow: 0 6px 24px rgba(5,77,89,.2); }
@@ -347,11 +467,19 @@ ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr))
   .map-container { min-height: 180px; }
   .bottom-container { height: 292px; flex-direction: column; gap: 7px; padding: 6px 10px 10px; overflow: hidden; transition: height .25s ease; }
   .bottom-container.expanded { height: 82vh; }
-  .sheet-handle { display: flex; align-items: center; justify-content: center; height: 18px; padding: 0; border: 0; background: transparent; }
+  .bottom-container.collapsed { height: 32px; flex-shrink: 0; gap: 0; }
+  .bottom-container.collapsed .search-container, .bottom-container.collapsed .list-scroll { display: none; }
+  .sheet-handle { display: flex; flex: 0 0 32px; align-items: center; justify-content: center; flex-direction: column; gap: 3px; width: 100%; height: 32px; padding: 0; border: 0; background: transparent; touch-action: none; cursor: ns-resize; }
+  .sheet-handle:focus-visible { outline: 2px solid #087f8c; border-radius: 8px; }
+  .sheet-handle small { font-size: 10px; color: #52777e; }
   .sheet-handle span { width: 42px; height: 5px; border-radius: 3px; background: #a9c9ce; }
   .search-container { width: 100%; padding: 7px; gap: 6px; }
   .source-links { margin: 0; padding: 0; font-size: 9px; }
   .list-scroll { min-height: 0; padding: 7px; }
   ul { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-container { transition: none; }
 }
 </style>

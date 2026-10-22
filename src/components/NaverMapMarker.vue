@@ -12,6 +12,7 @@ import { createAutomaticCourse } from '@/utils/coursePlanner.js';
 import { buildGpx, createGpxFilename } from '@/utils/gpx.js';
 import { gpxSaveErrorMessage, saveOrShareGpx } from '@/utils/gpxShare.js';
 import { visibleAreaRatio } from '@/utils/visibility.js';
+import { installMapLongPress } from '@/utils/mapLongPress.js';
 
 const props = defineProps({
   locations: { type: Array, required: true },
@@ -20,7 +21,7 @@ const props = defineProps({
   center: { type: Object, default: null },
 });
 
-const emit = defineEmits(['region-changed', 'map-tap', 'info-open-changed']);
+const emit = defineEmits(['region-changed', 'map-tap', 'info-open-changed', 'add-water']);
 const map = ref(null);
 const markers = ref({});
 const infoWindows = ref({});
@@ -48,6 +49,8 @@ let retainedInfoLocation;
 let mapDragging = false;
 let suppressMapTapUntil = 0;
 let visibilityFrame;
+let mapResizeObserver;
+let removeMapLongPress;
 
 const esc = (value) => String(value ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -274,6 +277,24 @@ const initMap = async () => {
   });
 
   mapDomElement = document.getElementById('map');
+  removeMapLongPress = installMapLongPress(mapDomElement, (point) => {
+    if (!window.naver?.maps?.Point) return;
+    const coord = map.value.getProjection().fromOffsetToCoord(new naver.maps.Point(point.x, point.y));
+    suppressMapTapUntil = Date.now() + 1000;
+    closeInfoWindows();
+    emit('add-water', { latitude: coord.lat(), longitude: coord.lng() });
+  });
+  // 하단 패널 접힘/복원으로 늘어난 영역까지 지도 타일과 컨트롤을 갱신한다.
+  mapResizeObserver = new ResizeObserver(([entry]) => {
+    const width = Math.round(entry.contentRect.width);
+    const height = Math.round(entry.contentRect.height);
+    if (!map.value || !window.naver?.maps?.Size || !width || !height) return;
+    const size = map.value.getSize();
+    if (size.width !== width || size.height !== height) {
+      map.value.setSize(new naver.maps.Size(width, height));
+    }
+  });
+  mapResizeObserver.observe(mapDomElement);
   mapDomClickHandler = (event) => {
     if (!event.target.closest('.water-marker, .info-window')) handleMapTap();
   };
@@ -589,6 +610,12 @@ const registerHelpers = () => {
   };
 };
 
+watch(() => props.allLocations, (items) => {
+  const ids = new Set(items.map((item) => item.id));
+  if (retainedInfoLocation?.custom && !ids.has(retainedInfoLocation.id)) closeInfoWindows();
+  if (routeLocations.value.some((item) => item.custom && !ids.has(item.id))) clearRoute();
+});
+
 watch(() => props.locations, async () => {
   if (!mapInitialized.value) return;
   await nextTick();
@@ -618,6 +645,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  removeMapLongPress?.();
+  mapResizeObserver?.disconnect();
   clearInterval(apiTimer);
   routeAbortController?.abort();
   cancelAnimationFrame(visibilityFrame);
