@@ -34,8 +34,10 @@ async function rebuild() {
 async function create() {
   try {
     error.value = '';
+    const clientId = import.meta.env.VITE_NAVER_NATIVE_CLIENT_ID?.trim();
+    if (!clientId) throw new Error('새 share-water Application의 Client ID 설정이 필요합니다.');
     await nextTick();
-    camera.value = await NativeMap.create({ clientId: import.meta.env.VITE_NAVER_CLIENT_ID,
+    camera.value = await NativeMap.create({ clientId,
       ...measureNativeMap(surface.value), center: markers[0], zoom: 15, bearing: 0 });
     await NativeMap.setMarkers({ markers });
     await NativeMap.setUserLocation({ position: { latitude: 37.511, longitude: 127.073 } });

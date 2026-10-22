@@ -16,6 +16,7 @@ Keep the web renderer available; do not change public community storage or devic
 
 - Capacitor remains 6.2.1. Provider SDKs: Android 3.24.0, iOS NMapsMap 3.24.0.
 - Normal `npm run build` starts the existing app. `npm run build:native-proof` starts the isolated proof screen and disables OTA updates and live advertisements.
+- The user created a separate Naver Cloud Application named `share-water` and added Android/iOS `com.sharewater.app`. Its new Client ID has not been supplied yet. Configure `VITE_NAVER_NATIVE_CLIENT_ID` in the ignored development `.env`; proof creation fails explicitly if it is absent. Keep `VITE_NAVER_CLIENT_ID` unchanged for the existing web/production renderer. No Client Secret is required or bundled. Verify saving the console settings and mobile authentication after receiving the ID.
 - Android: `npm run android:proof` creates a debug APK only. It is not a signed Play release.
 - iOS: build proof assets, `npx cap sync ios`, then build `ios/App/App.xcworkspace` with Xcode. Use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`; do not alter global xcode-select.
 - iOS Podfile requires platform 13.4 for the existing updater dependency. NMapsMap pod is pinned in Podfile/Podfile.lock. The existing AdMob 6 plugin cannot compile against UMP 3.1 (renamed Swift symbols); pin GoogleUserMessagingPlatform 2.2.0 for this proof. Revisit the ad SDK/plugin upgrade together before App Store release.
