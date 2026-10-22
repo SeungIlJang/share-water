@@ -50,6 +50,7 @@ let mapDragging = false;
 let suppressMapTapUntil = 0;
 let visibilityFrame;
 let mapResizeObserver;
+let mapResizeTimer;
 let removeMapLongPress;
 
 const esc = (value) => String(value ?? '')
@@ -289,12 +290,17 @@ const initMap = async () => {
     const width = Math.round(entry.contentRect.width);
     const height = Math.round(entry.contentRect.height);
     if (!map.value || !window.naver?.maps?.Size || !width || !height) return;
-    const size = map.value.getSize();
-    if (size.width !== width || size.height !== height) {
+    clearTimeout(mapResizeTimer);
+    mapResizeTimer = setTimeout(() => {
+      const center = map.value.getCenter();
       map.value.setSize(new naver.maps.Size(width, height));
-    }
+      naver.maps.Event.trigger(map.value, 'resize');
+      map.value.setCenter(center);
+      map.value.refresh();
+    }, 80);
   });
-  mapResizeObserver.observe(mapDomElement);
+  // SDK가 #map에 고정 픽셀 크기를 쓰므로 실제로 늘어나는 바깥 영역을 관찰한다.
+  mapResizeObserver.observe(mapDomElement.parentElement);
   mapDomClickHandler = (event) => {
     if (!event.target.closest('.water-marker, .info-window')) handleMapTap();
   };
@@ -647,6 +653,7 @@ onMounted(() => {
 onUnmounted(() => {
   removeMapLongPress?.();
   mapResizeObserver?.disconnect();
+  clearTimeout(mapResizeTimer);
   clearInterval(apiTimer);
   routeAbortController?.abort();
   cancelAnimationFrame(visibilityFrame);

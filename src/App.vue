@@ -8,14 +8,23 @@ import { initializeAdMob } from '@/services/adMob.js';
 import { DEFAULT_SEARCH_RADIUS_METERS, SEARCH_RADIUS_OPTIONS } from '@/config.js';
 import { getDistanceKm, locationsWithinRadius } from '@/utils/distance.js';
 import { createCustomWater, loadCustomWater, saveCustomWater } from '@/utils/customWater.js';
+import { loadCommunityCache, saveCommunityCache, fetchCommunityWater, publishCommunityWater,
+  deleteCommunityWater, mergeWaterLocations } from '@/services/communityWater.js';
 
 const DEFAULT_POSITION = { latitude: 37.5297, longitude: 126.9647 };
 const configuredRadius = Number(import.meta.env.VITE_DEFAULT_RADIUS);
 const DEFAULT_RADIUS = configuredRadius > 0 ? configuredRadius : DEFAULT_SEARCH_RADIUS_METERS;
 const RADIUS_OPTIONS = SEARCH_RADIUS_OPTIONS;
 
-const locations = ref([]);
+const officialLocations = ref([]);
+const sharedLocations = ref(loadCommunityCache());
 const customLocations = ref(loadCustomWater());
+const locations = computed(() => mergeWaterLocations(officialLocations.value, sharedLocations.value, customLocations.value));
+const isSavingWater = ref(false);
+const sharedSyncError = ref('');
+let sharedRefreshTimer;
+let sharedRefreshing = false;
+let addWaterDraftId;
 const addWaterPosition = ref(null);
 const addWaterName = ref('');
 const addWaterMemo = ref('');
@@ -23,19 +32,32 @@ const addWaterError = ref('');
 const deleteWaterId = ref(null);
 
 const openAddWater = (position) => {
+  addWaterDraftId = `custom-${crypto.randomUUID()}`;
   addWaterPosition.value = position;
   addWaterName.value = '';
   addWaterMemo.value = '';
   addWaterError.value = '';
 };
 
-const addWater = () => {
+const refreshSharedWater = async () => {
+  if (sharedRefreshing || document.hidden) return;
+  sharedRefreshing = true;
   try {
-    const item = createCustomWater({ ...addWaterPosition.value, title: addWaterName.value, detailLocation: addWaterMemo.value });
-    const updated = [...customLocations.value, item];
-    saveCustomWater(updated);
-    customLocations.value = updated;
-    locations.value = [...locations.value, item];
+    sharedLocations.value = await fetchCommunityWater();
+    sharedSyncError.value = '';
+  } catch {
+    sharedSyncError.value = '공유 음수대를 불러오지 못해 저장된 정보를 표시합니다.';
+  } finally { sharedRefreshing = false; }
+};
+
+const addWater = async () => {
+  if (isSavingWater.value) return;
+  isSavingWater.value = true;
+  try {
+    const draft = { ...createCustomWater({ ...addWaterPosition.value, title: addWaterName.value, detailLocation: addWaterMemo.value }), id: addWaterDraftId };
+    const item = await publishCommunityWater(draft);
+    sharedLocations.value = [...sharedLocations.value.filter(({ id }) => id !== item.id), item];
+    saveCommunityCache(sharedLocations.value);
     mode.value = 'near';
     searchQuery.value = '';
     searchContextLabel.value = '직접 추가한 위치';
@@ -45,19 +67,40 @@ const addWater = () => {
     addWaterPosition.value = null;
     setSheetCollapsed(false);
   } catch (error) { addWaterError.value = error.message; }
+  finally { isSavingWater.value = false; }
 };
 
-const deleteWater = () => {
+const shareLocalWater = async (item) => {
+  if (isSavingWater.value || !window.confirm('이 음수대의 이름·위치·메모를 모든 사용자에게 공개할까요?')) return;
+  isSavingWater.value = true;
+  try {
+    const saved = await publishCommunityWater(item);
+    sharedLocations.value = [...sharedLocations.value.filter(({ id }) => id !== saved.id), saved];
+    saveCommunityCache(sharedLocations.value);
+    const updated = customLocations.value.filter(({ id }) => id !== saved.id);
+    saveCustomWater(updated);
+    customLocations.value = updated;
+  } catch (error) { window.alert(error.message); }
+  finally { isSavingWater.value = false; }
+};
+
+const deleteWater = async () => {
+  if (isSavingWater.value) return;
+  isSavingWater.value = true;
   try {
     const id = deleteWaterId.value;
+    const target = locations.value.find((item) => item.id === id);
+    if (target?.shared) await deleteCommunityWater(id);
     const updated = customLocations.value.filter((item) => item.id !== id);
     saveCustomWater(updated);
     customLocations.value = updated;
-    locations.value = locations.value.filter((item) => item.id !== id);
+    sharedLocations.value = sharedLocations.value.filter((item) => item.id !== id);
+    saveCommunityCache(sharedLocations.value);
     if (selectedId.value === id) selectedId.value = null;
     deleteWaterId.value = null;
     addWaterError.value = '';
   } catch (error) { addWaterError.value = error.message; }
+  finally { isSavingWater.value = false; }
 };
 const selectedId = ref(null);
 const searchQuery = ref('');
@@ -166,10 +209,10 @@ const searchStatus = computed(() => {
 const fetchLocations = async () => {
   isLoading.value = true;
   try {
-    locations.value = [...await drinkingWaterData, ...customLocations.value];
+    officialLocations.value = await drinkingWaterData;
   } catch (error) {
     console.error('음수대 데이터 로드 실패:', error);
-    locations.value = [...customLocations.value];
+    officialLocations.value = [];
   } finally {
     isLoading.value = false;
   }
@@ -242,11 +285,16 @@ const handleRegionChanged = (center) => {
 onMounted(async () => {
   window.addEventListener('share-water:update-status', handleUpdateStatus);
   initializeAdMob();
+  document.addEventListener('visibilitychange', refreshSharedWater);
+  sharedRefreshTimer = setInterval(refreshSharedWater, 60_000);
+  void refreshSharedWater();
   await fetchLocations();
   await moveToCurrentLocation();
 });
 
 onUnmounted(() => {
+  clearInterval(sharedRefreshTimer);
+  document.removeEventListener('visibilitychange', refreshSharedWater);
   window.removeEventListener('share-water:update-status', handleUpdateStatus);
 });
 </script>
@@ -333,6 +381,7 @@ onUnmounted(() => {
         <p class="search-info" :class="{ warning: mode === 'search' && normalizedQuery.length < 2 }">
           {{ searchStatus }}
         </p>
+        <small v-if="sharedSyncError" class="shared-sync-error" role="status">{{ sharedSyncError }}</small>
         <div class="source-links">
           데이터 출처:
           <a
@@ -377,8 +426,9 @@ onUnmounted(() => {
             <p v-if="location.approximate" class="approximate-notice">⚠ 공원 대표 위치 · 개별 음수대 좌표 미확인</p>
             <p>{{ location.newAddress || location.address }}</p>
             <div v-if="location.custom" class="custom-water-actions">
-              <small>직접 추가 · 내 기기 저장</small>
-              <button type="button" @click.stop="deleteWaterId = location.id; addWaterError = ''">삭제</button>
+              <small>{{ location.shared ? '사용자 공유 · 현장 확인 필요' : '직접 추가 · 내 기기 저장' }}</small>
+              <button v-if="!location.shared" type="button" :disabled="isSavingWater" @click.stop="shareLocalWater(location)">전체 공개</button>
+              <button v-if="!location.shared || location.owned" type="button" :disabled="isSavingWater" @click.stop="deleteWaterId = location.id; addWaterError = ''">삭제</button>
             </div>
           </li>
         </ul>
@@ -386,23 +436,23 @@ onUnmounted(() => {
         <div v-else class="empty">조건에 맞는 음수대가 없습니다.</div>
       </div>
     </section>
-    <div v-if="addWaterPosition" class="water-dialog-backdrop" @click.self="addWaterPosition = null" @keydown.esc="addWaterPosition = null">
+    <div v-if="addWaterPosition" class="water-dialog-backdrop" @click.self="!isSavingWater && (addWaterPosition = null)" @keydown.esc="!isSavingWater && (addWaterPosition = null)">
       <form class="water-dialog" role="dialog" aria-modal="true" aria-labelledby="add-water-title" @submit.prevent="addWater">
         <h2 id="add-water-title">이 위치에 음수대 추가</h2>
-        <p>직접 추가한 장소는 이 기기에만 저장됩니다.<br>앱 데이터 삭제 시 함께 삭제됩니다.</p>
+        <p>등록한 이름·위치·메모가 모든 사용자에게 공개됩니다.<br>실제 음수대만 등록해 주세요. 등록한 기기에서 삭제할 수 있습니다.</p>
         <small>{{ addWaterPosition.latitude.toFixed(6) }}, {{ addWaterPosition.longitude.toFixed(6) }}</small>
         <label>음수대 이름<input v-model="addWaterName" required maxlength="80" placeholder="예: 한강 산책로 음수대"></label>
         <label>위치 메모 (선택)<textarea v-model="addWaterMemo" maxlength="200" rows="2" placeholder="예: 화장실 옆, 자전거길 입구"></textarea></label>
         <p v-if="addWaterError" class="water-form-error" role="alert">{{ addWaterError }}</p>
-        <div class="water-dialog-actions"><button type="button" @click="addWaterPosition = null">취소</button><button class="primary" type="submit">추가</button></div>
+        <div class="water-dialog-actions"><button type="button" :disabled="isSavingWater" @click="addWaterPosition = null">취소</button><button class="primary" type="submit" :disabled="isSavingWater">{{ isSavingWater ? '공유 중…' : '전체 공개로 추가' }}</button></div>
       </form>
     </div>
     <div v-if="deleteWaterId" class="water-dialog-backdrop" @click.self="deleteWaterId = null" @keydown.esc="deleteWaterId = null">
       <section class="water-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-water-title">
         <h2 id="delete-water-title">직접 추가한 음수대를 삭제할까요?</h2>
-        <p>공공데이터의 음수대는 변경되지 않습니다.</p>
+        <p>공유한 음수대는 모든 사용자의 목록에서 삭제됩니다. 공공데이터는 변경되지 않습니다.</p>
         <p v-if="addWaterError" class="water-form-error" role="alert">{{ addWaterError }}</p>
-        <div class="water-dialog-actions"><button type="button" @click="deleteWaterId = null">취소</button><button class="primary" type="button" @click="deleteWater">삭제</button></div>
+        <div class="water-dialog-actions"><button type="button" :disabled="isSavingWater" @click="deleteWaterId = null">취소</button><button class="primary" type="button" :disabled="isSavingWater" @click="deleteWater">{{ isSavingWater ? '삭제 중…' : '삭제' }}</button></div>
       </section>
     </div>
   </main>
@@ -444,6 +494,7 @@ ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr))
 .empty { padding: 28px 12px; color: #71898e; text-align: center; }
 .custom-water-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; color: #087f8c; }
 .custom-water-actions button { padding: 5px 10px; border: 1px solid #cce8ed; border-radius: 8px; background: white; color: #a13f37; }
+.shared-sync-error { color: #a13f37; font-size: 10px; text-align: center; }
 .water-dialog-backdrop { position: fixed; inset: 0; z-index: 9500; display: flex; align-items: center; justify-content: center; padding: 18px; background: #16333d80; }
 .water-dialog { width: min(400px, 100%); max-height: 85dvh; overflow-y: auto; padding: 22px; border-radius: 16px; background: white; box-shadow: 0 5px 25px #16333d40; }
 .water-dialog h2 { margin: 0 0 10px; font-size: 19px; }

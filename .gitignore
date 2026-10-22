@@ -45,3 +45,6 @@ android/app/release/
 
 # Local release packages (AAB/ZIP and release notes)
 release/
+
+# Cloudflare local state
+.wrangler/
