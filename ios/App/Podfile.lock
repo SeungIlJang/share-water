@@ -1,0 +1,94 @@
+PODS:
+  - Alamofire (5.10.2)
+  - BigInt (5.2.0)
+  - Capacitor (6.2.1):
+    - CapacitorCordova
+  - CapacitorAppLauncher (6.0.4):
+    - Capacitor
+  - CapacitorCommunityAdmob (6.2.0):
+    - Capacitor
+    - Google-Mobile-Ads-SDK (= 11.3.0)
+  - CapacitorCordova (6.2.1)
+  - CapacitorFilesystem (6.0.4):
+    - Capacitor
+  - CapacitorGeolocation (6.1.1):
+    - Capacitor
+  - CapacitorShare (6.0.4):
+    - Capacitor
+  - CapgoCapacitorUpdater (6.51.15):
+    - Alamofire (= 5.10.2)
+    - BigInt (= 5.2.0)
+    - Capacitor
+    - Version (= 0.8.0)
+    - ZIPFoundation (~> 0.9)
+  - Google-Mobile-Ads-SDK (11.3.0):
+    - GoogleUserMessagingPlatform (>= 1.1)
+  - GoogleUserMessagingPlatform (2.2.0)
+  - NMapsGeometry (1.0.2)
+  - NMapsMap (3.24.0):
+    - NMapsGeometry
+  - Version (0.8.0)
+  - ZIPFoundation (0.9.20)
+
+DEPENDENCIES:
+  - "Capacitor (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorAppLauncher (from `../../node_modules/@capacitor/app-launcher`)"
+  - "CapacitorCommunityAdmob (from `../../node_modules/@capacitor-community/admob`)"
+  - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorFilesystem (from `../../node_modules/@capacitor/filesystem`)"
+  - "CapacitorGeolocation (from `../../node_modules/@capacitor/geolocation`)"
+  - "CapacitorShare (from `../../node_modules/@capacitor/share`)"
+  - "CapgoCapacitorUpdater (from `../../node_modules/@capgo/capacitor-updater`)"
+  - GoogleUserMessagingPlatform (= 2.2.0)
+  - NMapsMap (= 3.24.0)
+
+SPEC REPOS:
+  trunk:
+    - Alamofire
+    - BigInt
+    - Google-Mobile-Ads-SDK
+    - GoogleUserMessagingPlatform
+    - NMapsGeometry
+    - NMapsMap
+    - Version
+    - ZIPFoundation
+
+EXTERNAL SOURCES:
+  Capacitor:
+    :path: "../../node_modules/@capacitor/ios"
+  CapacitorAppLauncher:
+    :path: "../../node_modules/@capacitor/app-launcher"
+  CapacitorCommunityAdmob:
+    :path: "../../node_modules/@capacitor-community/admob"
+  CapacitorCordova:
+    :path: "../../node_modules/@capacitor/ios"
+  CapacitorFilesystem:
+    :path: "../../node_modules/@capacitor/filesystem"
+  CapacitorGeolocation:
+    :path: "../../node_modules/@capacitor/geolocation"
+  CapacitorShare:
+    :path: "../../node_modules/@capacitor/share"
+  CapgoCapacitorUpdater:
+    :path: "../../node_modules/@capgo/capacitor-updater"
+
+SPEC CHECKSUMS:
+  Alamofire: 7193b3b92c74a07f85569e1a6c4f4237291e7496
+  BigInt: f668a80089607f521586bbe29513d708491ef2f7
+  Capacitor: 1e0d0e7330dea9f983b50da737d8918abcf273f8
+  CapacitorAppLauncher: 682e5c8fb765709250ed9045580db88e0e198f52
+  CapacitorCommunityAdmob: cb648c28df51906e1750ee9ddec1780a651a36db
+  CapacitorCordova: 8d93e14982f440181be7304aa9559ca631d77fff
+  CapacitorFilesystem: 45e086a4396be03456c3d53d34b17c89169dd8cd
+  CapacitorGeolocation: c518d020144978cd7eb7a25fa609a39f6c2fb93e
+  CapacitorShare: 44c43f74b95500ba7399c2ac21f0d55efc1a931e
+  CapgoCapacitorUpdater: 1253020db954f5b0c86b559ab25a528c6bb15552
+  Google-Mobile-Ads-SDK: 301a16c461c331ba34ff4dab40a22ab7c147af61
+  GoogleUserMessagingPlatform: d31dbfb40ec02c5d9683029815c5d5a7f46389ee
+  NMapsGeometry: 4e02554fa9880ef02ed96b075dc84355d6352479
+  NMapsMap: d42874735c5864f1131574378ff4088a2cbf5d92
+  Version: de5907f2c5d0f3cf21708db7801d1d5401139486
+  ZIPFoundation: dfd3d681c4053ff7e2f7350bc4e53b5dba3f5351
+
+PODFILE CHECKSUM: 9458815e6e3c4acdce95b420e9726ae230a43164
+
+COCOAPODS: 1.16.2
