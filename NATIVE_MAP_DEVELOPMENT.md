@@ -16,7 +16,7 @@ Keep the web renderer available; do not change public community storage or devic
 
 - Capacitor remains 6.2.1. Provider SDKs: Android 3.24.0, iOS NMapsMap 3.24.0.
 - Normal `npm run build` starts the existing app. `npm run build:native-proof` starts the isolated proof screen and disables OTA updates and live advertisements.
-- The user created a separate Naver Cloud Application named `share-water` and added Android/iOS `com.sharewater.app`. Its new Client ID has not been supplied yet. Configure `VITE_NAVER_NATIVE_CLIENT_ID` in the ignored development `.env`; proof creation fails explicitly if it is absent. Keep `VITE_NAVER_CLIENT_ID` unchanged for the existing web/production renderer. No Client Secret is required or bundled. Verify saving the console settings and mobile authentication after receiving the ID.
+- The user created a separate Naver Cloud Application named `share-water` and added Android/iOS `com.sharewater.app`. Its supplied Client ID is stored only as `VITE_NAVER_NATIVE_CLIENT_ID` in the ignored development `.env`. Both native platforms now authenticate and show actual map tiles. `VITE_NAVER_CLIENT_ID` and production remain unchanged. No Client Secret is required or bundled.
 - Android: `npm run android:proof` creates a debug APK only. It is not a signed Play release.
 - iOS: build proof assets, `npx cap sync ios`, then build `ios/App/App.xcworkspace` with Xcode. Use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`; do not alter global xcode-select.
 - iOS Podfile requires platform 13.4 for the existing updater dependency. NMapsMap pod is pinned in Podfile/Podfile.lock. The existing AdMob 6 plugin cannot compile against UMP 3.1 (renamed Swift symbols); pin GoogleUserMessagingPlatform 2.2.0 for this proof. Revisit the ad SDK/plugin upgrade together before App Store release.
@@ -36,7 +36,7 @@ Never log API keys. The app receives only a safe auth message and error code.
 
 ## Acceptance gates (not all complete)
 
-1. Authenticate and render real provider map tiles on both platforms. Android currently reports 401 with the existing web key; verify Mobile Dynamic Map access and package/bundle registration in the Naver Cloud console. Do not treat rendering markers over a blank grid as map acceptance.
+1. Authenticate and render real provider map tiles on both platforms: passed with the separately supplied native Client ID. Do not treat markers over a blank grid as map acceptance.
 2. Real two-pointer rotation and pinch; 0/45/90/180 degrees; inspect provider labels and marker orientation. Programmatic rotation alone is insufficient.
 3. HTML controls and popups remain interactive, map long press uses the held coordinate, no unintended registration after pinch/drag/cancel.
 4. Panel collapse/restore and advertisement safe-area simulation resize the native view and rendered tiles; no blank new area.
@@ -44,7 +44,7 @@ Never log API keys. The app receives only a safe auth message and error code.
 6. Integrate official/shared markers, selection popups, search/filtering, current location, routes/GPX and registration with existing Vue app. Keep web fallback.
 7. Physical Android and iPhone checks, release signing and production rollout only after acceptance. Simulator checks must be labeled as such.
 
-## Verification record
+## Historical verification record (initial key, superseded below)
 
 - Initial Android debug APK compilation: passed.
 - Android instrumentation APK compilation: passed.
@@ -54,4 +54,25 @@ Never log API keys. The app receives only a safe auth message and error code.
 - Android real-input instrumentation: passed 1 test covering two-pointer bearing change (>20°), actual HTML compass input, panel collapse/native height matching, and long-press delivery to Vue. Emulator only. Screenshots show 297° camera with upright markers and fixed UI. Basemap remains an unauthenticated grid, so no tile/label acceptance.
 - iOS full simulator build: passed for arm64/x86_64 with Xcode (CODE_SIGNING_ALLOWED=NO). Initial UMP incompatibility and a stale LaunchScreen build-cache failure were resolved; native Swift bridge independent typecheck also passed.
 - iOS 18.3 simulator runtime: app remained open and screenshot confirmed native markers/location beneath Vue header, buttons, bottom panel and simulated ad space. Initial SDK startup crash (missing iOS AdMob app ID) was fixed with the public sample ID. Mobile map authentication also returned 401. iOS actual touch gestures / physical iPhone remain unverified.
-- Console preparation: Naver Cloud console opened as managed tab `water-map-console`; it redirects to `https://auth.ncloud.com/login`. User login is required before inspecting mobile service/package/bundle registration. Do not change paid service settings without checking existing authorization/costs.
+- Initial console preparation required login. The later phone-based console setup and separate Client ID resolved that dependency; a Mac browser login is no longer required for current native map validation.
+
+## Follow-up verification — 2026-10-23
+
+- Recovered the interrupted run rather than repeating unknown actions.
+- Android: latest rendered-map instrumentation passed (`OK (1 test)`, 109.757 seconds). Includes real two-pointer input, 0/45/90/180 HTML controls, compass reset, route, panel resize, long press and background/resume. Captures are under ignored `release/native-map-proof-20261022/android/files/`. Emulator only.
+- iOS: actual tiles authenticate; HTML angle controls rotate the rendered map and long press reaches Vue. The main UI test still fails at actual two-pointer rotation.
+- A/B test 12 used a stock NMFNaverMapView in a separate DEBUG-only controller, without WebView routing: constant-separation synthetic rotation also failed. This rules out treating WebView hit testing alone as the established root cause.
+- Testing a combined rotation/separation-change touch trajectory next. This is real XCTest touch injection, not a camera command. Do not conflate combined-gesture success with proof that a mathematically constant-span rotation works.
+- Test runner uses XCTest synthesis interfaces in the UI-test bundle only, never the distributable application. SDK standalone controller is DEBUG-only.
+- Existing water data/search/popups/GPX/registration are not yet connected to the native renderer. No physical-device acceptance or production release.
+
+### iOS result recovered and advanced
+
+- Stock SDK test 14 passed in 9.656 s with a real two-finger rotation plus 25% separation increase. Inspected screenshot shows actual basemap at 276 degrees, readable labels.
+- Combined Vue/native test 16 passed in 42.508 s: angle controls, compass, panel collapse/restore, real rotation+pinch, route, long press, foreground/background. Inspected rotation capture shows actual basemap, upright water markers and fixed Vue controls at 276 degrees.
+- Earlier run 15 failed and its screenshot was white. Do not use header angle alone as rendering evidence. Added a render-complete status and UI-test wait for SDK `loaded && fullyRendered`.
+- Constant-separation synthetic rotation remains a distinct failed case; do not claim all possible gesture trajectories or physical-device behavior are validated. No replacement custom gesture recognizer or private SDK method was added to the application.
+- Removed passive SDK gesture diagnostics after tracing. Kept a DEBUG-only stock SDK A/B launch mode and test-runner-only XCTest synthesis helper for reproducible comparisons.
+- Xcode SDK stat cache stalled on this host; per-command `SDK_STAT_CACHE_ENABLE=NO` resumed compilation without changing global Xcode configuration or deleting source.
+
+- Final cleaned build: iOS suite 17 passed **2/2** in 52.634 s, including render-complete wait and both stock SDK/combined Vue cases. Existing Node suite **41/41**, proof build, normal production build and diff whitespace check passed. Normal build stayed local; no production OTA deployment.

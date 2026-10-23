@@ -7,6 +7,7 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.webkit.WebView;
 import androidx.test.core.app.ActivityScenario;
+import androidx.lifecycle.Lifecycle;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import com.naver.maps.map.NaverMap;
@@ -38,7 +39,7 @@ public class NativeMapGestureTest {
                 SystemClock.sleep(250);
             }
             assertNotNull("Native map did not initialize", activity.getNativeMapPlugin().currentMap());
-            SystemClock.sleep(3500);
+            waitForRendering();
             saveScreenshot("native-proof-before.png");
             AtomicReference<float[]> center=new AtomicReference<>();
             instrumentation.runOnMainSync(() -> {
@@ -53,6 +54,23 @@ public class NativeMapGestureTest {
             double delta=Math.abs(((after-before+540)%360)-180);
             assertTrue("Real two-finger rotation must change bearing; before="+before+", after="+after,delta>20);
             saveScreenshot("native-proof-after.png");
+
+            int[] angles={0,45,90,180};
+            for(int i=0;i<angles.length;i++) {
+                tapWebControl(".proof-row button:nth-child("+(i+1)+")");
+                SystemClock.sleep(500);
+                double difference=Math.abs(((bearing()-angles[i]+540)%360)-180);
+                assertTrue("Web angle control must update native camera: "+angles[i],difference<2);
+                long uiDeadline=SystemClock.uptimeMillis()+10000;
+                String uiBearing="document.querySelector('.proof-status span').textContent.trim().endsWith('"+angles[i]+"°')";
+                while(!Boolean.parseBoolean(js(uiBearing)) && SystemClock.uptimeMillis()<uiDeadline)SystemClock.sleep(100);
+                assertTrue("Vue bearing text must settle before capture",Boolean.parseBoolean(js(uiBearing)));
+                waitForRendering();
+                saveScreenshot("native-proof-bearing-"+angles[i]+".png");
+            }
+            tapWebControl(".proof-row + .proof-row button:first-child");
+            SystemClock.sleep(500);
+            saveScreenshot("native-proof-route.png");
 
             tapWebControl(".proof-compass");
             SystemClock.sleep(700);
@@ -77,12 +95,31 @@ public class NativeMapGestureTest {
             send(down,MotionEvent.ACTION_UP,1,c[0],c[1],0,0);
             SystemClock.sleep(500);
             assertTrue("Native long press must reach Vue",numberFromJs("document.querySelectorAll('.proof-picked').length")>0);
+
+            double retainedBearing=bearing();
+            scenario.moveToState(Lifecycle.State.CREATED);
+            scenario.moveToState(Lifecycle.State.RESUMED);
+            SystemClock.sleep(700);
+            assertNotNull("Native view must survive foreground/background",activity.getNativeMapPlugin().currentMapView());
+            assertEquals("Background/resume must retain camera",retainedBearing,bearing(),.1);
+            saveScreenshot("native-proof-resumed.png");
         }
     }
     private double bearing() {
         AtomicReference<Double> value=new AtomicReference<>();
         instrumentation.runOnMainSync(() -> value.set(activity.getNativeMapPlugin().currentMap().getCameraPosition().bearing));
         return value.get();
+    }
+    private void waitForRendering() {
+        long deadline=SystemClock.uptimeMillis()+60000;
+        AtomicReference<Boolean> complete=new AtomicReference<>(false);
+        while(SystemClock.uptimeMillis()<deadline) {
+            instrumentation.runOnMainSync(() -> complete.set(activity.getNativeMapPlugin().currentMap().isLoaded()
+                && activity.getNativeMapPlugin().currentMap().isFullyRendered()));
+            if(complete.get())break;
+            SystemClock.sleep(250);
+        }
+        assertTrue("Map SDK must finish loading/rendering before visual capture",complete.get());
     }
     private String js(String expression) throws Exception {
         CountDownLatch done=new CountDownLatch(1); AtomicReference<String> value=new AtomicReference<>();

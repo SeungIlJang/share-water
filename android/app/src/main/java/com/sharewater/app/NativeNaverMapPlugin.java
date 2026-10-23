@@ -113,6 +113,7 @@ public class NativeNaverMapPlugin extends Plugin {
         CameraPosition camera = map.getCameraPosition();
         JSObject result = location(camera.target);
         result.put("ready", true); result.put("zoom", camera.zoom); result.put("bearing", camera.bearing);
+        result.put("loaded", map.isLoaded()); result.put("fullyRendered", map.isFullyRendered());
         result.put("tilt", camera.tilt); result.put("markerCount", markers.size());
         if (selectedId != null && markers.containsKey(selectedId)) {
             PointF point = map.getProjection().toScreenLocation(markers.get(selectedId).getPosition());

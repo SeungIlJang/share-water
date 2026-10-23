@@ -26,6 +26,7 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
         guard let map = map else { return ["ready": false] }
         let camera = map.cameraPosition
         var result = location(camera.target)
+        result["loaded"] = map.loaded; result["fullyRendered"] = map.fullyRendered
         result.merge(["ready": true, "zoom": camera.zoom, "bearing": camera.heading, "tilt": camera.tilt, "markerCount": markers.count]) { _, new in new }
         if let id = selectedID, let marker = markers[id] {
             let point = map.projection.point(from: marker.position)
@@ -49,14 +50,17 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
         excluded = (call.getArray("excludedRects", JSObject.self) ?? []).map(rectangle)
         guard let native = native, let web = bridge?.webView, let parent = native.superview else { return }
         let cssFrame = CGRect(x: bounds.minX * ratio, y: bounds.minY * ratio, width: bounds.width * ratio, height: bounds.height * ratio)
-        native.frame = web.convert(cssFrame, to: parent)
+        let frame = web.convert(cssFrame, to: parent)
+        if native.frame != frame { native.frame = frame; native.layoutIfNeeded() }
     }
     func nativeTarget(at point: CGPoint, in container: UIView, event: UIEvent?) -> UIView? {
         guard let native = native, let web = bridge?.webView else { return nil }
         let webPoint = container.convert(point, to: web)
         let cssPoint = CGPoint(x: webPoint.x / ratio, y: webPoint.y / ratio)
         guard bounds.contains(cssPoint), !excluded.contains(where: { $0.contains(cssPoint) }) else { return nil }
-        return native.hitTest(container.convert(point, to: native), with: event)
+        let target = native.hitTest(container.convert(point, to: native), with: event)
+        target?.isMultipleTouchEnabled = true
+        return target
     }
     @objc func create(_ call: CAPPluginCall) {
         guard let key = call.getString("clientId"), !key.isEmpty else { call.reject("Native map client ID is missing"); return }
@@ -65,9 +69,23 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
             guard let container = self.bridge?.viewController?.view as? NativeMapTouchContainer, let web = self.bridge?.webView else { call.reject("Native map host unavailable"); return }
             NMFAuthManager.shared().delegate = self
             NMFAuthManager.shared().client = NMFNcpKeyClient(ncpKeyId: key, beta: false)
-            let native = NMFNaverMapView(frame: .zero)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--native-map-sdk-probe") {
+                let probe = NativeMapSDKProbeController()
+                probe.modalPresentationStyle = .fullScreen
+                self.bridge?.viewController?.present(probe, animated: false)
+                call.resolve(["ready": false, "sdkProbe": true])
+                return
+            }
+            #endif
+            self.readBounds(call)
+            let cssFrame = CGRect(x: self.bounds.minX * self.ratio, y: self.bounds.minY * self.ratio, width: self.bounds.width * self.ratio, height: self.bounds.height * self.ratio)
+            let native = NMFNaverMapView(frame: web.convert(cssFrame, to: container))
+            native.isMultipleTouchEnabled = true
+            native.mapView.isMultipleTouchEnabled = true
             self.native = native
             container.insertSubview(native, at: 0)
+            native.layoutIfNeeded()
             web.isOpaque = false
             web.backgroundColor = .clear
             web.scrollView.backgroundColor = .clear
@@ -78,7 +96,7 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
             native.showIndoorLevelPicker = false
             native.mapView.isRotateGestureEnabled = true
             native.mapView.isZoomGestureEnabled = true
-            native.mapView.isTiltGestureEnabled = false
+            native.mapView.positionMode = .normal
             native.mapView.touchDelegate = self
             native.mapView.addCameraDelegate(delegate: self)
             self.readBounds(call)
@@ -163,7 +181,9 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
     public func authorized(_ state: NMFAuthState, error: Error?) {
         if let error = error as NSError? { notifyListeners("authError", data: ["code": String(error.code), "message": "네이버 모바일 지도 인증 설정을 확인해 주세요."]) }
     }
+    @objc(mapView:cameraIsChangingByReason:)
     public func mapView(_ mapView: NMFMapView, cameraIsChangingByReason reason: Int) { notifyListeners("cameraMove", data: state()) }
+    @objc(mapViewCameraIdle:)
     public func mapViewCameraIdle(_ mapView: NMFMapView) { notifyListeners("cameraIdle", data: state()) }
     public func mapView(_ mapView: NMFMapView, didTapMap latlng: NMGLatLng, point: CGPoint) { notifyListeners("mapTap", data: location(latlng)) }
     public func mapView(_ mapView: NMFMapView, didLongTapMap latlng: NMGLatLng, point: CGPoint) { notifyListeners("mapLongPress", data: location(latlng)) }

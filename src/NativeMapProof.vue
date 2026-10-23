@@ -4,6 +4,7 @@ import { NativeMap, nativeMapAvailable, measureNativeMap, observeNativeMapBounds
 
 const surface = ref(null);
 const ready = ref(false);
+const rendered = ref(false);
 const error = ref('');
 const authCode = ref('');
 const camera = ref({ bearing: 0, zoom: 15 });
@@ -19,6 +20,7 @@ const markers = [
 ];
 const bearing = computed(() => Math.round(camera.value.bearing || 0));
 let cleanupBounds;
+let renderTimer;
 const listeners = [];
 
 async function turn(angle) { camera.value = await NativeMap.moveCamera({ bearing: angle }); }
@@ -33,6 +35,8 @@ async function rebuild() {
 }
 async function create() {
   try {
+    clearInterval(renderTimer);
+    rendered.value = false;
     error.value = '';
     const clientId = import.meta.env.VITE_NAVER_NATIVE_CLIENT_ID?.trim();
     if (!clientId) throw new Error('새 share-water Application의 Client ID 설정이 필요합니다.');
@@ -42,6 +46,15 @@ async function create() {
     await NativeMap.setMarkers({ markers });
     await NativeMap.setUserLocation({ position: { latitude: 37.511, longitude: 127.073 } });
     ready.value = true;
+    renderTimer = setInterval(async () => {
+      try {
+        const state = await NativeMap.getState();
+        if (state.loaded && state.fullyRendered) {
+          rendered.value = true;
+          clearInterval(renderTimer);
+        }
+      } catch { clearInterval(renderTimer); }
+    }, 250);
   } catch (failure) { error.value = failure.message; }
 }
 onMounted(async () => {
@@ -59,6 +72,7 @@ onMounted(async () => {
   window.__nativeMapProof = { getState: () => NativeMap.getState(), turn, rebuild };
 });
 onUnmounted(() => {
+  clearInterval(renderTimer);
   cleanupBounds?.();
   for (const listener of listeners) void listener.remove();
   if (nativeMapAvailable()) void NativeMap.destroy();
@@ -70,9 +84,11 @@ onUnmounted(() => {
 <template>
   <main class="proof-app">
     <section ref="surface" class="proof-map">
+      <div class="proof-gesture-target" role="img" aria-label="지도 제스처 검증 영역"></div>
       <header class="proof-status" data-native-map-ui>
         <strong>네이티브 지도 · 개발 검증</strong>
         <span>운영 미반영 · {{ ready ? '지도 준비됨' : '지도 준비 중' }} · {{ bearing }}°</span>
+        <small v-if="rendered">지도 렌더링 확인됨</small>
         <small v-if="clicked">선택: {{ clicked }}</small>
         <small v-if="error" class="proof-error">{{ error }} {{ authCode }}</small>
       </header>
@@ -106,6 +122,7 @@ onUnmounted(() => {
 html.native-map-active, html.native-map-active body, html.native-map-active #app { background: transparent !important; }
 .proof-app { position: fixed; inset: 0; display: flex; flex-direction: column; background: transparent; color: #16333d; }
 .proof-map { position: relative; flex: 1; min-height: 180px; background: transparent; }
+.proof-gesture-target { position: absolute; top: 160px; bottom: 95px; left: 24px; right: 100px; }
 .proof-status { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 12px; right: 12px; padding: 10px; display: flex; flex-direction: column; gap: 4px; border-radius: 12px; background: #fffffff0; box-shadow: 0 2px 8px #0002; font-size: 13px; }
 .proof-compass { position: absolute; right: 16px; bottom: 16px; }
 .proof-picked { position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; flex-direction: column; padding: 12px; gap: 6px; border-radius: 12px; background: white; }

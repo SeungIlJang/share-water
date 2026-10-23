@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0000B06748572FE8F2AA4A36 /* NativeMapProofUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E300A7565150BC2EA99F3BA9 /* NativeMapProofUITests.swift */; };
 		13BFAC6F2EBAB84C125AC635 /* NativeMapViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A223D377BC4C26E39F1278F /* NativeMapViewController.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -15,13 +16,27 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		899D9894CB1E91BD460C472A /* WaterMapTouchProbe.m in Sources */ = {isa = PBXBuildFile; fileRef = 455C59A6E90F97FCE75BD6AF /* WaterMapTouchProbe.m */; };
 		8B650592D604A426CF61B801 /* WaterNativeMapPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F6C5AF9B0FB7D181A41636 /* WaterNativeMapPlugin.swift */; };
 		A084ECDBA7D38E1E42DFC39D /* Pods_App.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */; };
+		DC8C32A1DD0BA08E4D12109F /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C0BF4E38C990D6A23C46F82F /* Foundation.framework */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		FD3719D094A1860CE83A2D95 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 504EC3031FED79650016851F;
+			remoteInfo = App;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
+		336E865928A5A56A65B9B5FA /* WaterMapTouchProbe.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = WaterMapTouchProbe.h; sourceTree = "<group>"; };
 		42F6C5AF9B0FB7D181A41636 /* WaterNativeMapPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WaterNativeMapPlugin.swift; sourceTree = "<group>"; };
+		455C59A6E90F97FCE75BD6AF /* WaterMapTouchProbe.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = WaterMapTouchProbe.m; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -30,13 +45,24 @@
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
+		66A5A4A45EC34872C4774445 /* NativeMapProofUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NativeMapProofUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6A223D377BC4C26E39F1278F /* NativeMapViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeMapViewController.swift; sourceTree = "<group>"; };
 		AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_App.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.release.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.release.xcconfig"; sourceTree = "<group>"; };
+		C0BF4E38C990D6A23C46F82F /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		E300A7565150BC2EA99F3BA9 /* NativeMapProofUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NativeMapProofUITests.swift; sourceTree = "<group>"; };
 		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		43CA125BADCCCD9D8EAB10FC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DC8C32A1DD0BA08E4D12109F /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		504EC3011FED79650016851F /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -52,6 +78,7 @@
 			isa = PBXGroup;
 			children = (
 				AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */,
+				810A932C9E23021984DC0EDE /* iOS */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -63,6 +90,7 @@
 				504EC3051FED79650016851F /* Products */,
 				7F8756D8B27F46E3366F6CEA /* Pods */,
 				27E2DDA53C4D2A4D1A88CE4A /* Frameworks */,
+				89A9BBDABE40572D0B81320D /* NativeMapProofUITests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -70,6 +98,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				66A5A4A45EC34872C4774445 /* NativeMapProofUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -100,6 +129,25 @@
 			name = Pods;
 			sourceTree = "<group>";
 		};
+		810A932C9E23021984DC0EDE /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				C0BF4E38C990D6A23C46F82F /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		89A9BBDABE40572D0B81320D /* NativeMapProofUITests */ = {
+			isa = PBXGroup;
+			children = (
+				E300A7565150BC2EA99F3BA9 /* NativeMapProofUITests.swift */,
+				336E865928A5A56A65B9B5FA /* WaterMapTouchProbe.h */,
+				455C59A6E90F97FCE75BD6AF /* WaterMapTouchProbe.m */,
+			);
+			name = NativeMapProofUITests;
+			path = NativeMapProofUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -122,6 +170,24 @@
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		838A021EFC012555924E3C16 /* NativeMapProofUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D3F5ED61AEFB06002A01F407 /* Build configuration list for PBXNativeTarget "NativeMapProofUITests" */;
+			buildPhases = (
+				1FB8534980CA4F46657D537A /* Sources */,
+				43CA125BADCCCD9D8EAB10FC /* Frameworks */,
+				B40E850A4E0284CB476B764A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D001472E4B8993404D3087A3 /* PBXTargetDependency */,
+			);
+			name = NativeMapProofUITests;
+			productName = NativeMapProofUITests;
+			productReference = 66A5A4A45EC34872C4774445 /* NativeMapProofUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -153,6 +219,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				838A021EFC012555924E3C16 /* NativeMapProofUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -168,6 +235,13 @@
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B40E850A4E0284CB476B764A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -225,6 +299,15 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		1FB8534980CA4F46657D537A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0000B06748572FE8F2AA4A36 /* NativeMapProofUITests.swift in Sources */,
+				899D9894CB1E91BD460C472A /* WaterMapTouchProbe.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		504EC3001FED79650016851F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -236,6 +319,15 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D001472E4B8993404D3087A3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = App;
+			target = 504EC3031FED79650016851F /* App */;
+			targetProxy = FD3719D094A1860CE83A2D95 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -257,6 +349,39 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		07AA50D2E48BFDAC2E9B406B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sharewater.app.nativeprooftests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = NativeMapProofUITests/WaterMapTouchProbe.h;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = App;
+			};
+			name = Debug;
+		};
+		494F1F3C5AF836B012257C6B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 13.4;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sharewater.app.nativeprooftests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = NativeMapProofUITests/WaterMapTouchProbe.h;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = App;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		504EC3141FED79650016851F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -420,6 +545,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D3F5ED61AEFB06002A01F407 /* Build configuration list for PBXNativeTarget "NativeMapProofUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				494F1F3C5AF836B012257C6B /* Release */,
+				07AA50D2E48BFDAC2E9B406B /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
