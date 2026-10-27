@@ -107,9 +107,9 @@ const buildInfoContent = (location) => {
       ${details ? `<div class="info-rich">${details}</div>` : ''}
       ${distance}
       <div class="info-actions">
-        <button class="info-btn route${order ? ' added' : ''}" type="button" onclick='window.__swToggleRoute(${JSON.stringify(String(location.id))})'>${order ? '✓' : '＋'} ${routeLabel}</button>
-        <button class="info-btn navigate" type="button" onclick='window.__swNavigate(${location.latitude}, ${location.longitude}, ${JSON.stringify(location.title)})'>🧭 길찾기</button>
-        <button class="info-btn copy" type="button" onclick='window.__swCopy(${JSON.stringify(address)})'>📋 주소복사</button>
+        <button class="info-btn route${order ? ' added' : ''}" type="button" onclick='window.__swToggleRoute(${esc(JSON.stringify(String(location.id)))})'>${order ? '✓' : '＋'} ${routeLabel}</button>
+        <button class="info-btn navigate" type="button" onclick='window.__swNavigate(${location.latitude}, ${location.longitude}, ${esc(JSON.stringify(location.title))})'>🧭 길찾기</button>
+        <button class="info-btn copy" type="button" onclick='window.__swCopy(${esc(JSON.stringify(address))})'>📋 주소복사</button>
       </div>
     </div>`;
 };

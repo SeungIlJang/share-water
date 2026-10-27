@@ -17,7 +17,7 @@ const toPublic = async (row, ownerHash) => ({
 export function validatePoint(body) {
   const title = typeof body?.title === 'string' ? body.title.trim() : '';
   const detail = typeof body?.detailLocation === 'string' ? body.detailLocation.trim() : '';
-  if (/(https?:\/\/|www\.|[\w.+-]+@[\w.-]+\.[a-z]{2,}|(?:0[1278]0[- ]?\d{3,4}[- ]?\d{4})|씨발|시발|개새끼|병신|fuck|porn)/i.test(`${title} ${detail}`)) return null;
+  if (/(<|>|https?:\/\/|www\.|[\w.+-]+@[\w.-]+\.[a-z]{2,}|(?:0[1278]0[- ]?\d{3,4}[- ]?\d{4})|씨발|시발|개새끼|병신|fuck|porn)/i.test(`${title} ${detail}`)) return null;
   if (!idPattern.test(body?.id || '') || !title || title.length > 80 || detail.length > 200
     || !Number.isFinite(body.latitude) || Math.abs(body.latitude) > 90
     || !Number.isFinite(body.longitude) || Math.abs(body.longitude) > 180) return null;

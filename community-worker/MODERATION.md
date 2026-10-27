@@ -4,7 +4,7 @@ The iOS release adds submission-policy consent, server-side rejection of obvious
 
 ## Operator duty before and after launch
 
-Review reports regularly and act promptly. A public support contact must be supplied by the owner before Store submission; no contact or guaranteed response SLA is fabricated here. Local blocking hides all points from a contributor, survives restart, and can be reset from the results list. It does not erase server records.
+Review reports regularly and act promptly. The existing same-app public support contact is linked from the published support page; no guaranteed response SLA is promised here. Local blocking hides all points from a contributor, survives restart, and can be reset from the results list. It does not erase server records.
 
 Use the existing authenticated Wrangler/D1 tooling from this folder. Read first:
 

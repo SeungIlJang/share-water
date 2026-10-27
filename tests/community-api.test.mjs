@@ -124,7 +124,7 @@ test('신고 접수는 비공개·중복 방지이며 차단된 등록자의 글
 test('공개 제보에서 광고 링크·연락처·명백한 욕설을 거부한다', async () => {
   const { db, request } = setup();
   try {
-    for (const text of ['https://spam.example', 'user@example.com', '010-1234-5678', '씨발']) {
+    for (const text of ['https://spam.example', 'user@example.com', '010-1234-5678', '씨발', '<script>alert(1)</script>']) {
       assert.equal((await request('/water', { method: 'POST', token: owner, body: { ...point(), detailLocation: text } })).status, 400);
     }
     assert.equal((await request('/water', { method: 'POST', token: owner, body: point() })).status, 201);
