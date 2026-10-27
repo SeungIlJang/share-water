@@ -57,6 +57,7 @@ export const publishCommunityWater = async (item) => (await request('/water', { 
 } })).item;
 
 export const deleteCommunityWater = (id) => request(`/water/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const reportCommunityWater = (id, reason) => request(`/water/${encodeURIComponent(id)}/report`, { method: 'POST', body: { reason } });
 
 export function mergeWaterLocations(official, shared, local) {
   const community = new Map(shared.map((item) => [item.id, item]));

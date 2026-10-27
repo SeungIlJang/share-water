@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { Capacitor } from '@capacitor/core';
+import { NativeMap, nativeMapAvailable } from '@/services/nativeMap.js';
 import NaverMapMarker from '@/components/NaverMapMarker.vue';
 import { drinkingWaterData } from '@/assets/data.js';
 import { searchPlaces } from '@/assets/searchPlaces.js';
@@ -9,7 +11,7 @@ import { DEFAULT_SEARCH_RADIUS_METERS, SEARCH_RADIUS_OPTIONS } from '@/config.js
 import { getDistanceKm, locationsWithinRadius } from '@/utils/distance.js';
 import { createCustomWater, loadCustomWater, saveCustomWater } from '@/utils/customWater.js';
 import { loadCommunityCache, saveCommunityCache, fetchCommunityWater, publishCommunityWater,
-  deleteCommunityWater, mergeWaterLocations } from '@/services/communityWater.js';
+  deleteCommunityWater, reportCommunityWater, mergeWaterLocations } from '@/services/communityWater.js';
 
 const DEFAULT_POSITION = { latitude: 37.5297, longitude: 126.9647 };
 const configuredRadius = Number(import.meta.env.VITE_DEFAULT_RADIUS);
@@ -19,7 +21,10 @@ const RADIUS_OPTIONS = SEARCH_RADIUS_OPTIONS;
 const officialLocations = ref([]);
 const sharedLocations = ref(loadCommunityCache());
 const customLocations = ref(loadCustomWater());
-const locations = computed(() => mergeWaterLocations(officialLocations.value, sharedLocations.value, customLocations.value));
+const BLOCKED_KEY = 'share-water:blocked-contributors:v1';
+const blockedContributors = ref((() => { try { const value = JSON.parse(localStorage.getItem(BLOCKED_KEY) || '[]'); return Array.isArray(value) ? value.filter((id) => /^[a-f0-9]{64}$/.test(id)) : []; } catch { return []; } })());
+const locations = computed(() => mergeWaterLocations(officialLocations.value, sharedLocations.value, customLocations.value)
+  .filter((item) => !item.shared || !blockedContributors.value.includes(item.contributorId)));
 const isSavingWater = ref(false);
 const sharedSyncError = ref('');
 let sharedRefreshTimer;
@@ -30,13 +35,63 @@ const addWaterName = ref('');
 const addWaterMemo = ref('');
 const addWaterError = ref('');
 const deleteWaterId = ref(null);
+const reportWater = ref(null);
+const reportReason = ref('incorrect');
+const reportError = ref('');
+const reportSending = ref(false);
+const reportNotice = ref('');
+const addWaterAccepted = ref(false);
+const nativeRegistrationOpen = ref(false);
 
-const openAddWater = (position) => {
+const submitReport = async () => {
+  if (!reportWater.value || reportSending.value) return;
+  reportSending.value = true;
+  try {
+    await reportCommunityWater(reportWater.value.id, reportReason.value);
+    reportNotice.value = '신고가 접수되었습니다. 운영자가 내용을 확인합니다.';
+    reportWater.value = null;
+  } catch (error) { reportError.value = error.message; }
+  finally { reportSending.value = false; }
+};
+const blockContributor = (item) => {
+  if (!item.contributorId || !window.confirm('이 등록자의 모든 제보를 이 기기에서 숨길까요?')) return;
+  const next = [...new Set([...blockedContributors.value, item.contributorId])];
+  try { localStorage.setItem(BLOCKED_KEY, JSON.stringify(next)); }
+  catch { window.alert('기기 저장 공간을 확인해 주세요.'); return; }
+  blockedContributors.value = next;
+  if (!locations.value.some(({ id }) => id === selectedId.value)) selectedId.value = null;
+  reportNotice.value = '등록자의 제보를 숨겼습니다.';
+};
+const restoreContributors = () => {
+  try { localStorage.removeItem(BLOCKED_KEY); }
+  catch { window.alert('기기 저장 공간을 확인해 주세요.'); return; }
+  blockedContributors.value = [];
+  reportNotice.value = '등록자 숨김을 해제했습니다.';
+};
+
+const openAddWater = async (position) => {
+  if (nativeRegistrationOpen.value || isSavingWater.value) return;
+  const nativeForm = Capacitor.getPlatform() === 'ios' && nativeMapAvailable();
+  nativeRegistrationOpen.value = nativeForm;
   addWaterDraftId = `custom-${crypto.randomUUID()}`;
   addWaterPosition.value = position;
   addWaterName.value = '';
   addWaterMemo.value = '';
   addWaterError.value = '';
+  addWaterAccepted.value = false;
+  if (nativeForm) {
+    try {
+      const result = await NativeMap.presentRegistrationForm();
+      if (!result.cancelled) {
+        addWaterName.value = result.title;
+        addWaterMemo.value = result.detailLocation;
+        addWaterAccepted.value = true;
+        await addWater();
+        if (addWaterError.value) window.alert(addWaterError.value);
+      }
+    } catch (error) { window.alert(error.message || '등록창을 열지 못했습니다. 다시 시도해 주세요.'); }
+    finally { addWaterPosition.value = null; nativeRegistrationOpen.value = false; }
+  }
 };
 
 const refreshSharedWater = async () => {
@@ -52,6 +107,7 @@ const refreshSharedWater = async () => {
 
 const addWater = async () => {
   if (isSavingWater.value) return;
+  if (!addWaterAccepted.value) { addWaterError.value = '제보 이용 안내에 동의해 주세요.'; return; }
   isSavingWater.value = true;
   try {
     const draft = { ...createCustomWater({ ...addWaterPosition.value, title: addWaterName.value, detailLocation: addWaterMemo.value }), id: addWaterDraftId };
@@ -404,10 +460,12 @@ onUnmounted(() => {
             target="_blank"
             rel="noopener noreferrer"
           >지자체 공식자료</a>
+          · <a class="source-link" href="https://seungiljang.github.io/privacy/share-water-support.html" target="_blank" rel="noopener noreferrer">개인정보·지원</a>
         </div>
       </div>
 
       <div id="water-results" class="list-scroll">
+        <button v-if="blockedContributors.length" type="button" @click="restoreContributors">숨긴 등록자 모두 다시 보기 ({{ blockedContributors.length }})</button>
         <ul v-if="!isLoading && displayedLocations.length">
           <li
             v-for="location in displayedLocations"
@@ -429,6 +487,8 @@ onUnmounted(() => {
               <small>{{ location.shared ? '사용자 공유 · 현장 확인 필요' : '직접 추가 · 내 기기 저장' }}</small>
               <button v-if="!location.shared" type="button" :disabled="isSavingWater" @click.stop="shareLocalWater(location)">전체 공개</button>
               <button v-if="!location.shared || location.owned" type="button" :disabled="isSavingWater" @click.stop="deleteWaterId = location.id; addWaterError = ''">삭제</button>
+              <button v-if="location.shared" type="button" @click.stop="reportWater = location; reportError = ''; reportReason = 'incorrect'">신고</button>
+              <button v-if="location.shared && !location.owned && location.contributorId" type="button" @click.stop="blockContributor(location)">등록자 숨기기</button>
             </div>
           </li>
         </ul>
@@ -436,17 +496,28 @@ onUnmounted(() => {
         <div v-else class="empty">조건에 맞는 음수대가 없습니다.</div>
       </div>
     </section>
-    <div v-if="addWaterPosition" class="water-dialog-backdrop" data-native-map-ui @click.self="!isSavingWater && (addWaterPosition = null)" @keydown.esc="!isSavingWater && (addWaterPosition = null)">
+    <div v-if="addWaterPosition && !nativeRegistrationOpen" class="water-dialog-backdrop" data-native-map-ui @click.self="!isSavingWater && (addWaterPosition = null)" @keydown.esc="!isSavingWater && (addWaterPosition = null)">
       <form class="water-dialog" role="dialog" aria-modal="true" aria-labelledby="add-water-title" @submit.prevent="addWater">
         <h2 id="add-water-title">이 위치에 음수대 추가</h2>
-        <p>등록한 이름·위치·메모가 모든 사용자에게 공개됩니다.<br>실제 음수대만 등록해 주세요. 등록한 기기에서 삭제할 수 있습니다.</p>
+        <p>등록한 이름·위치·메모가 모든 사용자에게 공개됩니다.<br>실제 음수대만 등록해 주세요. 개인정보·광고·욕설·혐오 내용은 금지되며 삭제 또는 등록 제한될 수 있습니다. 등록한 기기에서 삭제할 수 있습니다.</p>
         <small>{{ addWaterPosition.latitude.toFixed(6) }}, {{ addWaterPosition.longitude.toFixed(6) }}</small>
         <label>음수대 이름<input v-model="addWaterName" required maxlength="80" placeholder="예: 한강 산책로 음수대"></label>
         <label>위치 메모 (선택)<textarea v-model="addWaterMemo" maxlength="200" rows="2" placeholder="예: 화장실 옆, 자전거길 입구"></textarea></label>
+        <label class="water-terms"><input v-model="addWaterAccepted" type="checkbox" required>공개 제보 이용 안내에 동의합니다.</label>
         <p v-if="addWaterError" class="water-form-error" role="alert">{{ addWaterError }}</p>
         <div class="water-dialog-actions"><button type="button" :disabled="isSavingWater" @click="addWaterPosition = null">취소</button><button class="primary" type="submit" :disabled="isSavingWater">{{ isSavingWater ? '공유 중…' : '전체 공개로 추가' }}</button></div>
       </form>
     </div>
+    <div v-if="reportWater" class="water-dialog-backdrop" data-native-map-ui>
+      <form class="water-dialog" role="dialog" aria-modal="true" aria-labelledby="report-water-title" @submit.prevent="submitReport">
+        <h2 id="report-water-title">음수대 제보 신고</h2>
+        <p>{{ reportWater.title }}</p>
+        <label>신고 사유<select v-model="reportReason"><option value="incorrect">위치·시설 정보가 잘못됨</option><option value="inappropriate">욕설·광고·부적절한 내용</option><option value="personal-info">개인정보 노출</option></select></label>
+        <p v-if="reportError" role="alert">{{ reportError }}</p>
+        <div class="water-dialog-actions"><button type="button" :disabled="reportSending" @click="reportWater = null">취소</button><button type="submit" class="primary" :disabled="reportSending">{{ reportSending ? '접수 중…' : '신고 접수' }}</button></div>
+      </form>
+    </div>
+    <div v-if="reportNotice" class="report-notice" data-native-map-ui role="status">{{ reportNotice }} <button type="button" @click="reportNotice = ''">닫기</button></div>
     <div v-if="deleteWaterId" class="water-dialog-backdrop" data-native-map-ui @click.self="deleteWaterId = null" @keydown.esc="deleteWaterId = null">
       <section class="water-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-water-title">
         <h2 id="delete-water-title">직접 추가한 음수대를 삭제할까요?</h2>
@@ -505,6 +576,9 @@ ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr))
 .water-dialog-actions button { min-height: 44px; padding: 8px 20px; border: 1px solid #b7dce2; border-radius: 8px; background: white; color: #087f8c; font-weight: 700; }
 .water-dialog-actions .primary { background: #087f8c; color: white; }
 .water-dialog .water-form-error { color: #b33a30; }
+.water-dialog .water-terms { flex-direction: row; align-items: center; font-size: 13px; }
+.water-dialog .water-terms input { width: 20px; height: 20px; flex-shrink: 0; }
+.report-notice { position: fixed; bottom: 28px; left: 16px; right: 16px; z-index: 9600; padding: 12px; border-radius: 12px; background: #16333d; color: white; font-size: 14px; }
 
 .update-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(238,248,251,.94); backdrop-filter: blur(3px); }
 .update-card { min-width: 220px; display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 27px 24px; border-radius: 16px; background: white; color: #16333d; box-shadow: 0 6px 24px rgba(5,77,89,.2); }

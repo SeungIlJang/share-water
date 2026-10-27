@@ -13,7 +13,7 @@ import { buildGpx, createGpxFilename } from '@/utils/gpx.js';
 import { gpxSaveErrorMessage, saveOrShareGpx } from '@/utils/gpxShare.js';
 import { visibleAreaRatio } from '@/utils/visibility.js';
 import { installMapLongPress } from '@/utils/mapLongPress.js';
-import { NativeMap, nativeMapAvailable, measureNativeMap, observeNativeMapBounds } from '@/services/nativeMap.js';
+import { NativeMap, nativeMapAvailable, clampNativePopup, measureNativeMap, observeNativeMapBounds } from '@/services/nativeMap.js';
 
 const props = defineProps({
   locations: { type: Array, required: true },
@@ -350,9 +350,12 @@ const applyNativeCamera = (state) => {
   nativeCamera.value = { ...nativeCamera.value, ...state };
   if (nativePopup.value && state.selected && String(state.selected.id) === String(openInfoId.value)) {
     const viewport = window.visualViewport;
-    const offsetX = viewport?.offsetLeft || 0;
-    nativePopup.value.x = offsetX + Math.max(145, Math.min((viewport?.width || window.innerWidth) - 145, state.selected.x));
-    nativePopup.value.y = state.selected.y + (viewport?.offsetTop || 0);
+    const box = mapDomElement.getBoundingClientRect();
+    const height = mapDomElement.querySelector('.native-popup')?.getBoundingClientRect().height || 260;
+    Object.assign(nativePopup.value, clampNativePopup(state.selected, box, {
+      width: viewport?.width || window.innerWidth, height: viewport?.height || window.innerHeight,
+      offsetLeft: viewport?.offsetLeft || 0, offsetTop: viewport?.offsetTop || 0,
+    }, height));
     // Allow initial recentering and keyboard dismissal before offscreen checks.
     if (performance.now() - nativePopup.value.openedAt > 800) checkInfoWindowVisibility();
   }

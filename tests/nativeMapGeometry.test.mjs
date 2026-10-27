@@ -22,3 +22,16 @@ test('native touch exclusions follow the visual viewport when iOS focuses a form
     if (oldDocument === undefined) delete globalThis.document; else globalThis.document = oldDocument;
   }
 });
+
+test('native information actions remain within an iPad map after a keyboard transition', async () => {
+  const { clampNativePopup } = await import('../src/services/nativeMap.js');
+  const map = rect(0, 0, 1032, 1110), viewport = { width:1032,height:1376 };
+  const p = clampNativePopup({x:516,y:-300},map,viewport,260);
+  assert.equal(p.x,516);
+  assert.ok(p.y-52-260 >= 12);
+  assert.ok(p.y < map.bottom);
+  assert.deepEqual(clampNativePopup({x:516,y:600},map,viewport,260), {x:516,y:600});
+  const edge = clampNativePopup({x:2000,y:2000},map,viewport,260);
+  assert.ok(edge.x+140 <= 1020);
+  assert.ok(edge.y <= 1098);
+});

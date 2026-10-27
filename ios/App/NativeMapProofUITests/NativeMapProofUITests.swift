@@ -24,6 +24,11 @@ final class NativeMapProofUITests: XCTestCase {
         app = XCUIApplication()
         if name.contains("testIntegrated") {
             app.launch()
+            // A fresh simulator may show the system permission sheet. Exercise
+            // the supported permission-denied path before waiting for app UI.
+            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            let deny = springboard.alerts.buttons.matching(NSPredicate(format: "label IN %@", ["허용 안 함", "Don’t Allow", "Don't Allow"])).firstMatch
+            if deny.waitForExistence(timeout: 3) { deny.tap() }
             let compass = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "지도를 북쪽으로")).firstMatch
             XCTAssertTrue(compass.waitForExistence(timeout: 45))
             let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in compass.isEnabled }, object: nil)
@@ -76,6 +81,12 @@ final class NativeMapProofUITests: XCTestCase {
         capture("ios-integrated-rotated")
         area.press(forDuration: 1.2)
         XCTAssertTrue(app.staticTexts["이 위치에 음수대 추가"].waitForExistence(timeout: 10))
+        let consent = app.buttons["동의하고 공개 추가"]
+        XCTAssertTrue(consent.exists)
+        XCTAssertFalse(consent.isEnabled, "Empty public submissions must be disabled")
+        let name = app.textFields["water-registration-name"]
+        name.tap(); name.typeText("저장하지 않는 검증용 이름")
+        XCTAssertTrue(consent.isEnabled)
         capture("ios-integrated-registration-before-cancel")
         app.buttons["취소"].tap()
         let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !self.app.staticTexts["이 위치에 음수대 추가"].exists }, object: nil)

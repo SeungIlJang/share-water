@@ -99,3 +99,34 @@ test('공유 음수대가 500개를 넘어도 페이지를 통해 모두 조회�
     assert.equal(second.cursor, null);
   } finally { db.close(); }
 });
+
+test('신고 접수는 비공개·중복 방지이며 차단된 등록자의 글과 재등록을 제한한다', async () => {
+  const { db, request } = setup();
+  try {
+    const p = point();
+    const created = await (await request('/water', { method: 'POST', token: owner, body: p })).json();
+    assert.match(created.item.contributorId, /^[a-f0-9]{64}$/);
+    const sameAuthor = await (await request('/water', { token: other })).json();
+    assert.equal(sameAuthor.items[0].contributorId, created.item.contributorId);
+    assert.equal((await request(`/water/${p.id}/report`, { method: 'POST', body: { reason: 'incorrect' } })).status, 401);
+    assert.equal((await request(`/water/${p.id}/report`, { method: 'POST', token: other, body: { reason: 'bad' } })).status, 400);
+    for (let i = 0; i < 2; i++) assert.equal((await request(`/water/${p.id}/report`, { method: 'POST', token: other, body: { reason: 'inappropriate' } })).status, 200);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM water_reports').get().n, 1);
+    assert.equal(JSON.stringify(await (await request('/water')).json()).includes('reporter_hash'), false);
+    db.prepare('INSERT INTO blocked_contributors(owner_hash) SELECT owner_hash FROM water_points WHERE id=?').run(p.id);
+    assert.equal((await (await request('/water')).json()).items.length, 0);
+    assert.equal((await request('/water', { method: 'POST', token: owner, body: { ...point(), latitude: 38 } })).status, 403);
+    // Moderation must not revoke an owner's deletion capability.
+    assert.equal((await request(`/water/${p.id}`, { method: 'DELETE', token: owner })).status, 200);
+  } finally { db.close(); }
+});
+
+test('공개 제보에서 광고 링크·연락처·명백한 욕설을 거부한다', async () => {
+  const { db, request } = setup();
+  try {
+    for (const text of ['https://spam.example', 'user@example.com', '010-1234-5678', '씨발']) {
+      assert.equal((await request('/water', { method: 'POST', token: owner, body: { ...point(), detailLocation: text } })).status, 400);
+    }
+    assert.equal((await request('/water', { method: 'POST', token: owner, body: point() })).status, 201);
+  } finally { db.close(); }
+});

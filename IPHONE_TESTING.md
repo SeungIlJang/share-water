@@ -150,3 +150,9 @@ Enrollment support: https://developer.apple.com/support/enrollment/
 
 Do not record passwords or verification codes in repository files. Account authentication
 is completed by the user in Xcode and on the device.
+
+## Build2 continuation — 2026-10-27 evening
+
+The standard UIKit registration form fixes the clean simulator cancel gate. iPad popup anchoring and route-choice regression passed after clamping its card to the visible map. Build2 archive is signed and was installed as an update on the connected iPhone, then launched with process survival confirmed. Existing local ownership was preserved.
+
+Physical XCTest did not execute: Xcode requires a new `com.sharewater.app.nativeprooftests.xctrunner` profile and currently reports `No Accounts`; fresh account count0. The previous successful build1 upload is not evidence of current login. Reuse the existing paid Team after the owner restores the account; do not delete apps, certificates or cached profiles. Store export of build2 is blocked separately by missing cloud distribution authentication. ASC browser remains logged in. See APP_STORE_RELEASE.md for the latest status.

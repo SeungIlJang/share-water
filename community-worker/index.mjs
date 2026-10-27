@@ -6,7 +6,8 @@ const idPattern = /^custom-[a-f0-9-]{36}$/;
 const tokenFrom = (request) => request.headers.get('Authorization')?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
 const hash = async (value) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',
   new TextEncoder().encode(value))), (byte) => byte.toString(16).padStart(2, '0')).join('');
-const toPublic = (row, ownerHash) => ({
+const toPublic = async (row, ownerHash) => ({
+  contributorId: await hash(`public-contributor:${row.owner_hash}`),
   id: row.id, title: row.title, detailLocation: row.detail, latitude: row.latitude,
   longitude: row.longitude, address: `위도 ${row.latitude.toFixed(6)} · 경도 ${row.longitude.toFixed(6)}`,
   source: '사용자 등록 · 현장 확인 필요', custom: true, shared: true,
@@ -16,6 +17,7 @@ const toPublic = (row, ownerHash) => ({
 export function validatePoint(body) {
   const title = typeof body?.title === 'string' ? body.title.trim() : '';
   const detail = typeof body?.detailLocation === 'string' ? body.detailLocation.trim() : '';
+  if (/(https?:\/\/|www\.|[\w.+-]+@[\w.-]+\.[a-z]{2,}|(?:0[1278]0[- ]?\d{3,4}[- ]?\d{4})|씨발|시발|개새끼|병신|fuck|porn)/i.test(`${title} ${detail}`)) return null;
   if (!idPattern.test(body?.id || '') || !title || title.length > 80 || detail.length > 200
     || !Number.isFinite(body.latitude) || Math.abs(body.latitude) > 90
     || !Number.isFinite(body.longitude) || Math.abs(body.longitude) > 180) return null;
@@ -61,13 +63,14 @@ export default {
       if (url.pathname === '/water' && request.method === 'GET') {
         const cursor = url.searchParams.get('cursor') || '';
         if (cursor && !idPattern.test(cursor)) return json({ error: '잘못된 조회 요청입니다.' }, 400);
-        const { results } = await env.DB.prepare('SELECT * FROM water_points WHERE id > ? ORDER BY id LIMIT 501').bind(cursor).all();
+        const { results } = await env.DB.prepare('SELECT * FROM water_points WHERE id > ? AND owner_hash NOT IN (SELECT owner_hash FROM blocked_contributors) ORDER BY id LIMIT 501').bind(cursor).all();
         const page = results.slice(0, 500);
-        return json({ items: page.map((row) => toPublic(row, ownerHash)),
+        return json({ items: await Promise.all(page.map((row) => toPublic(row, ownerHash))),
           cursor: results.length > 500 ? page.at(-1).id : null });
       }
       if (url.pathname === '/water' && request.method === 'POST') {
         if (!ownerHash) return json({ error: '기기 등록 정보가 필요합니다.' }, 401);
+        if (await env.DB.prepare('SELECT owner_hash FROM blocked_contributors WHERE owner_hash=?').bind(ownerHash).first()) return json({ error: '이 기기는 등록이 제한되어 있습니다.' }, 403);
         let body;
         try { body = await readSmallJson(request); } catch { return json({ error: '등록 내용을 확인해 주세요.' }, 400); }
         const point = validatePoint(body);
@@ -75,7 +78,7 @@ export default {
         const existing = await env.DB.prepare('SELECT * FROM water_points WHERE id=?').bind(point.id).first();
         if (existing) {
           if (existing.owner_hash !== ownerHash) return json({ error: '이미 등록된 음수대입니다.' }, 409);
-          return json({ item: toPublic(existing, ownerHash) });
+          return json({ item: await toPublic(existing, ownerHash) });
         }
         if (env.WRITE_LIMITER && !(await env.WRITE_LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || ownerHash })).success) {
           return json({ error: '등록 요청이 많습니다. 잠시 후 다시 시도해 주세요.' }, 429);
@@ -96,7 +99,18 @@ export default {
           throw error;
         }
         const saved = await env.DB.prepare('SELECT * FROM water_points WHERE id=?').bind(point.id).first();
-        return json({ item: toPublic(saved, ownerHash) }, 201);
+        return json({ item: await toPublic(saved, ownerHash) }, 201);
+      }
+      const reportMatch = url.pathname.match(/^\/water\/(custom-[a-f0-9-]{36})\/report$/);
+      if (reportMatch && request.method === 'POST') {
+        if (!ownerHash) return json({ error: '기기 등록 정보가 필요합니다.' }, 401);
+        let body;
+        try { body = await readSmallJson(request); } catch { return json({ error: '신고 내용을 확인해 주세요.' }, 400); }
+        if (!['incorrect', 'inappropriate', 'personal-info'].includes(body.reason)) return json({ error: '신고 사유를 선택해 주세요.' }, 400);
+        if (!await env.DB.prepare('SELECT id FROM water_points WHERE id=?').bind(reportMatch[1]).first()) return json({ error: '이미 삭제된 음수대입니다.' }, 404);
+        if (env.WRITE_LIMITER && !(await env.WRITE_LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || ownerHash })).success) return json({ error: '요청이 많습니다. 잠시 후 다시 시도해 주세요.' }, 429);
+        await env.DB.prepare('INSERT OR IGNORE INTO water_reports(point_id,reporter_hash,reason) VALUES(?,?,?)').bind(reportMatch[1], ownerHash, body.reason).run();
+        return json({ reported: true });
       }
       const match = url.pathname.match(/^\/water\/(custom-[a-f0-9-]{36})$/);
       if (match && request.method === 'DELETE') {

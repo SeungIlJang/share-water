@@ -7,7 +7,7 @@ import NMapsGeometry
 public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchDelegate, NMFMapViewCameraDelegate, NMFAuthManagerDelegate {
     public let identifier = "WaterNativeMapPlugin"
     public let jsName = "WaterNativeMap"
-    public let pluginMethods: [CAPPluginMethod] = ["create", "setBounds", "getState", "moveCamera", "fitBounds", "setMarkers", "setRoute", "setUserLocation", "destroy"].map { CAPPluginMethod(name: $0, returnType: CAPPluginReturnPromise) }
+    public let pluginMethods: [CAPPluginMethod] = ["create", "setBounds", "getState", "moveCamera", "fitBounds", "setMarkers", "setRoute", "setUserLocation", "presentRegistrationForm", "destroy"].map { CAPPluginMethod(name: $0, returnType: CAPPluginReturnPromise) }
     private var native: NMFNaverMapView?
     private var markers: [String: NMFMarker] = [:]
     private var route: NMFPolylineOverlay?
@@ -187,6 +187,35 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
         self.map?.locationOverlay.location = self.coordinate(call.getObject("position"))
         self.map?.locationOverlay.hidden = false; call.resolve()
     } }
+    /// Use UIKit for a form opened by a native map gesture. This avoids asking
+    /// WebKit to take over the SDK's just-finished touch sequence.
+    @objc func presentRegistrationForm(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard let host = self.bridge?.viewController, host.presentedViewController == nil else {
+                call.reject("이미 열린 창을 닫고 다시 시도해 주세요."); return
+            }
+            let alert = UIAlertController(title: "이 위치에 음수대 추가",
+                message: "이름·위치·메모가 모든 사용자에게 공개됩니다. 실제 음수대만 등록해 주세요. 개인정보·광고·욕설·혐오는 금지되며 삭제·등록 제한될 수 있습니다. 등록한 기기에서 삭제할 수 있습니다.\n‘동의하고 공개 추가’를 누르면 이 안내에 동의합니다.", preferredStyle: .alert)
+            alert.addTextField { $0.placeholder = "음수대 이름 (필수, 80자 이내)"; $0.accessibilityIdentifier = "water-registration-name" }
+            alert.addTextField { $0.placeholder = "위치 메모 (선택, 200자 이내)"; $0.accessibilityIdentifier = "water-registration-memo" }
+            var observers: [NSObjectProtocol] = []
+            let finish = { observers.forEach { NotificationCenter.default.removeObserver($0) }; observers.removeAll() }
+            alert.addAction(UIAlertAction(title: "취소", style: .cancel) { _ in finish(); call.resolve(["cancelled": true]) })
+            let save = UIAlertAction(title: "동의하고 공개 추가", style: .default) { [weak alert] _ in
+                finish()
+                call.resolve(["cancelled": false, "title": alert?.textFields?[0].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "", "detailLocation": alert?.textFields?[1].text ?? ""])
+            }
+            save.isEnabled = false
+            alert.addAction(save)
+            for field in alert.textFields ?? [] {
+                observers.append(NotificationCenter.default.addObserver(forName: UITextField.textDidChangeNotification, object: field, queue: .main) { [weak alert, weak save] _ in
+                    let name = alert?.textFields?[0].text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    save?.isEnabled = !name.isEmpty && name.count <= 80 && (alert?.textFields?[1].text?.count ?? 0) <= 200
+                })
+            }
+            host.present(alert, animated: true)
+        }
+    }
     @objc func destroy(_ call: CAPPluginCall) { DispatchQueue.main.async { self.dispose(); call.resolve() } }
     private func dispose() {
         map?.removeCameraDelegate(delegate: self); map?.touchDelegate = nil
