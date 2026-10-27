@@ -76,3 +76,9 @@ Keep `rollback-before-native-map-20261022` and original production OTA `web-355b
 - Local privacy-policy draft has been updated for public submissions and iOS SDK removal; the published policy URL has **not** been updated or verified to match it.
 
 Resume after authentication: finish the clean modal-input regression gate, refresh the release archive if source behavior changes, export with `ios/ExportOptions-AppStore.plist`, verify the distribution-signed IPA, create/check the App Store Connect record and upload. Settle all review gates above before submitting for review or releasing.
+
+## Evening account handoff
+
+- App Store Connect browser login is now verified; do not ask the owner to repeat it.
+- Created the iOS app record **모두의 음수대**, primary language Korean, bundle `com.sharewater.app`, internal SKU `share-water-ios`. Apple app ID: `6827522083`; record: https://appstoreconnect.apple.com/apps/6827522083/distribution . This does not upload a build or publish the app.
+- Xcode Apple account count was independently rechecked and remains zero. The owner must add the paid-membership Apple account under Xcode → Settings → Accounts (Apple Accounts), using the + button. Xcode workspace is open; do not claim its Settings panel was automatically opened.
