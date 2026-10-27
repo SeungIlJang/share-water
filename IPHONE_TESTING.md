@@ -2,6 +2,10 @@
 
 Development worktree only; production and rollback checkpoint are unchanged.
 
+## Current verified status — 2026-10-27 evening
+
+Paid Team and both Xcode/Store logins are confirmed. App Store Connect version 1.0 (1) upload and Apple build processing succeeded, but no review/public release occurred. The same candidate was re-signed for development, installed as an update on the iPhone, launched and remained running. Owner confirmation of rendered map / rotated-map registration cancel is pending. Earlier authentication/launch blockers below are historical, not instructions to request login/trust again. See APP_STORE_RELEASE.md for current gates.
+
 ## Verified
 
 - USB-connected physical iPhone 14 is paired with this Mac.
@@ -35,6 +39,12 @@ After profile trust is approved, retry device launch, verify the process stays a
 - iOS dependencies now intentionally exclude unused AdMob/OTA SDKs; no sample GAD ID is required. iOS icon and launch screen use the existing water-brand SVGs; a privacy manifest is included.
 - Search clearing itself during automatic map moves was fixed by reporting gesture camera changes separately. Clean iOS search/selection/route-choice passes.
 - Collapsed/rotated-map registration cancel passed with diagnostics but failed again in the clean final run; not accepted. Temporary diagnostic code is removed. See APP_STORE_RELEASE.md for exact release result and resumption steps. No Store upload has completed.
+
+## Evening outcome superseding the initial blockers
+
+- Xcode account and App Store Connect browser authentication are now confirmed; App Store export/upload succeeded. Apple finished processing version 1.0 (1). No review submission/public release.
+- Paid-Team development export was installed on the connected iPhone without uninstalling. Launch succeeded and the app process stayed alive. New provisioning expiry: 2027-10-26 21:48:37 UTC. No security error on this launch.
+- Owner was asked to verify the actual map and the collapsed/rotated-map registration-cancel flow on the phone. Await that answer; do not mark physical functional checks passed based only on the running process.
 
 ---
 

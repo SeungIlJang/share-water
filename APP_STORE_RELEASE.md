@@ -5,7 +5,7 @@
 - App: 모두의 음수대, bundle ID `com.sharewater.app`, version `1.0` / build `1`.
 - Work only in `development/native-map-20261022`. Do not merge/push main or replace the production Android/web OTA.
 - Apple Developer Program membership was verified active on the developer website today. This does not establish App Store Connect or Xcode upload authentication.
-- App Store Connect currently displays a separate login screen in the managed Chrome tab. The owner must complete authentication there; never save a password or OTP here.
+- App Store Connect and Xcode authentication are now verified. Do not ask the owner to repeat sign-in unless fresh evidence shows expiration; never save a password or OTP here. Earlier failed-export notes below describe the initial state.
 - Native-map iOS assets use the native renderer, no proof screen, no OTA updates and no iOS banner requests. A store upload is not review submission or public release.
 - Capacitor's supported iOS `includePlugins` configuration excludes the unused AdMob and OTA SDKs from the iOS binary only. Android dependencies remain unchanged. iOS no longer requires a sample advertising App ID at startup.
 - Required-reason manifest declares file timestamps for GPX/files inside the app container. Public-submission content is declared for app functionality, not tracking.
@@ -81,4 +81,14 @@ Resume after authentication: finish the clean modal-input regression gate, refre
 
 - App Store Connect browser login is now verified; do not ask the owner to repeat it.
 - Created the iOS app record **모두의 음수대**, primary language Korean, bundle `com.sharewater.app`, internal SKU `share-water-ios`. Apple app ID: `6827522083`; record: https://appstoreconnect.apple.com/apps/6827522083/distribution . This does not upload a build or publish the app.
-- Xcode Apple account count was independently rechecked and remains zero. The owner must add the paid-membership Apple account under Xcode → Settings → Accounts (Apple Accounts), using the + button. Xcode workspace is open; do not claim its Settings panel was automatically opened.
+- Xcode initially had zero accounts; the owner then added the paid-membership account. Account count became one, and the separate browser/Xcode authentication gates are now resolved. Do not ask the owner to repeat those logins without new evidence.
+
+## Successful upload and device launch
+
+- App Store IPA export succeeded after Xcode sign-in. Deep signature, application identifier, `get-task-allow=false`, no device allowlist, non-enterprise profile and current expiry checks all passed. Local IPA: `release/share-water-ios-appstore-20261027/export/App.ipa`, 5,437,086 bytes, SHA-256 `f75bf2cf85eb2ddf1a32019f157c65f3e0fe48b3754db1c69855f087eb8cc440`.
+- Upload succeeded using `xcodebuild -exportArchive` with an export-options copy setting `method=app-store-connect`, `destination=upload`, the verified Team and automatic signing. No app-specific password or new API key was requested. The local-export hash above is not asserted to equal Xcode's re-exported upload package.
+- App Store Connect independently confirmed version **1.0 / build 1**, then processing completion (`제출 준비 완료` in the TestFlight build list), Apple build ID `b09809af-12bd-4fac-a885-81e2c48327a7`. **This is build-processing status, not App Review approval, review submission or public release.** No testers were invited and no automatic distribution group was created.
+- Upload warnings: the current iOS 13.4 deployment target will need to be raised to at least 15.0 for the announced April 2027 requirement; vendor NMapsMap/NMapsGeometry matching dSYMs were absent. Upload still succeeded. Do not fabricate symbol files or claim that warnings were resolved.
+- Also exported the same archive with `method=debugging` and automatic signing for the connected iPhone. Device profile expires 2027-10-26 21:48:37 UTC. Verified device inclusion and signature, installed as an update without uninstalling, launched successfully, and confirmed the own app process remained running. The old security launch error did not occur on this launch.
+- Requested owner confirmation on the real iPhone: collapse panel, rotate, long press, cancel registration (do not save a public test point). Physical UI acceptance is **pending**; process survival does not establish rendered-map or touch correctness.
+- Review gates above still apply: clean modal-input regression, final store metadata/screenshots/privacy/support/age-rating and public-submission handling. Do not submit for review or release merely because the build list says ready to submit.
