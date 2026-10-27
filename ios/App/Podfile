@@ -11,20 +11,16 @@ install! 'cocoapods', :disable_input_output_paths => true
 def capacitor_pods
   pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
   pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
-  pod 'CapacitorCommunityAdmob', :path => '../../node_modules/@capacitor-community/admob'
   pod 'CapacitorAppLauncher', :path => '../../node_modules/@capacitor/app-launcher'
   pod 'CapacitorFilesystem', :path => '../../node_modules/@capacitor/filesystem'
   pod 'CapacitorGeolocation', :path => '../../node_modules/@capacitor/geolocation'
   pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
-  pod 'CapgoCapacitorUpdater', :path => '../../node_modules/@capgo/capacitor-updater'
 end
 
 target 'App' do
   capacitor_pods
   # Add your Pods here
   pod 'NMapsMap', '3.24.0'
-  # AdMob 6 / Google Ads 11.3 uses the pre-3.0 UMP Swift names.
-  pod 'GoogleUserMessagingPlatform', '2.2.0'
 end
 
 post_install do |installer|

@@ -33,6 +33,12 @@ async function rebuild() {
   await NativeMap.destroy();
   await create();
 }
+async function openWebFallback() {
+  cleanupBounds?.();
+  clearInterval(renderTimer);
+  await NativeMap.destroy();
+  location.search = '?nativeMap=web';
+}
 async function create() {
   try {
     clearInterval(renderTimer);
@@ -111,7 +117,7 @@ onUnmounted(() => {
           <button @click="controlClicks++">웹 버튼 {{ controlClicks }}</button>
           <button :disabled="!ready" @click="rebuild">지도 재생성</button>
         </div>
-        <a href="/?nativeMap=web">기존 웹 지도 열기</a>
+        <a href="/?nativeMap=web" @click.prevent="openWebFallback">기존 웹 지도 열기</a>
       </template>
     </section>
     <footer class="proof-ad-space">광고·하단 안전 영역 검증 공간</footer>

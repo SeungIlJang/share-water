@@ -22,6 +22,14 @@ final class NativeMapProofUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
+        if name.contains("testIntegrated") {
+            app.launch()
+            let compass = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "지도를 북쪽으로")).firstMatch
+            XCTAssertTrue(compass.waitForExistence(timeout: 45))
+            let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in compass.isEnabled }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 45), .completed)
+            return
+        }
         if name.contains("testStandaloneSDKRotation") {
             app.launchArguments = ["--native-map-sdk-probe"]
             app.launch()
@@ -44,6 +52,68 @@ final class NativeMapProofUITests: XCTestCase {
         let rotated = XCTWaiter.wait(for: [changed], timeout: 15) == .completed
         capture("ios-stock-sdk-real-rotation")
         XCTAssertTrue(rotated, "Stock SDK must rotate without WebView involvement")
+    }
+    func testIntegratedMapRotationPanelGpxAndRegistrationCancel() {
+        capture("ios-integrated-initial")
+        app.buttons["GPX"].tap()
+        XCTAssertTrue(app.staticTexts["음수대 왕복 코스 만들기"].waitForExistence(timeout: 10))
+        app.buttons["닫기"].tap()
+        let handle = app.buttons["목록 크게 펼치기"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 10))
+        let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 90)))
+        XCTAssertTrue(app.buttons["검색·목록 다시 열기"].waitForExistence(timeout: 10))
+        let area = app.images["음수대 지도"]
+        XCTAssertTrue(area.waitForExistence(timeout: 10))
+        XCTAssertNil(WaterMapRotate(app, area.frame, .pi / 2))
+        let compass = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "지도를 북쪽으로")).firstMatch
+        let rotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let text = compass.label + " " + (compass.value as? String ?? "")
+            guard let range = text.range(of: #"\d+°"#, options: .regularExpression), let n = Int(text[range].dropLast()) else { return false }
+            return min(n,360-n) > 20
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [rotated], timeout: 15), .completed)
+        capture("ios-integrated-rotated")
+        area.press(forDuration: 1.2)
+        XCTAssertTrue(app.staticTexts["이 위치에 음수대 추가"].waitForExistence(timeout: 10))
+        capture("ios-integrated-registration-before-cancel")
+        app.buttons["취소"].tap()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !self.app.staticTexts["이 위치에 음수대 추가"].exists }, object: nil)
+        let didClose = XCTWaiter.wait(for: [closed], timeout: 5)
+        capture("ios-integrated-registration-cancel")
+        XCTAssertEqual(didClose, .completed)
+        app.buttons["검색·목록 다시 열기"].tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 10))
+        capture("ios-integrated-restored")
+    }
+    func testIntegratedSearchSelectionAndRouteChoice() {
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        search.typeText("아시아공원")
+        // Dismiss the system keyboard before selecting a result below the field.
+        // XCTest otherwise targets a stale offscreen frame and can type into the IME.
+        let done = app.toolbars.buttons["Done"]
+        if done.exists { done.tap() }
+        let place = app.staticTexts.matching(NSPredicate(format: "label == %@", "아시아공원 음수대")).firstMatch
+        XCTAssertTrue(place.waitForExistence(timeout: 15))
+        place.tap()
+        let addRoute = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "경로추가")).firstMatch
+        XCTAssertTrue(addRoute.waitForExistence(timeout: 10))
+        capture("ios-integrated-selected-water")
+        addRoute.coordinate(withNormalizedOffset: CGVector(dx: 0.5,dy: 0.5)).tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "경로빼기")).firstMatch.waitForExistence(timeout: 10))
+        capture("ios-integrated-route-choice")
+    }
+    func testIntegratedRegistrationCancelOnly() {
+        let area = app.images["음수대 지도"]
+        XCTAssertTrue(area.waitForExistence(timeout: 10))
+        area.press(forDuration: 1.2)
+        XCTAssertTrue(app.staticTexts["이 위치에 음수대 추가"].waitForExistence(timeout: 10))
+        capture("ios-registration-only-before")
+        app.buttons["취소"].tap()
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !self.app.staticTexts["이 위치에 음수대 추가"].exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed)
     }
     func testNativeRotationWebControlsPanelLongPressAndResume() {
         capture("ios-native-map-initial")

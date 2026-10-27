@@ -105,6 +105,61 @@ public class NativeMapGestureTest {
             saveScreenshot("native-proof-resumed.png");
         }
     }
+    @Test public void integratedMapControlsAndRegistrationCancel() throws Exception {
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
+            scenario.onActivity(instance -> activity=instance);
+            long deadline=SystemClock.uptimeMillis()+60000;
+            while(SystemClock.uptimeMillis()<deadline) {
+                AtomicReference<Boolean> ready=new AtomicReference<>(false);
+                instrumentation.runOnMainSync(() -> ready.set(activity.getNativeMapPlugin()!=null && activity.getNativeMapPlugin().currentMap()!=null));
+                if(ready.get())break;
+                SystemClock.sleep(250);
+            }
+            assertNotNull("Integrated native map must initialize",activity.getNativeMapPlugin().currentMap());
+            waitForRendering();
+            saveScreenshot("native-integrated-initial.png");
+            tapWebControl(".gpx-open-btn");
+            waitForJs("!!document.querySelector('.gpx-dialog')");
+            tapWebControl(".gpx-close-btn");
+            waitForJs("!document.querySelector('.gpx-dialog')");
+            // Use actual Activity input on the existing sheet handle.
+            String result=js("JSON.stringify((()=>{const r=document.querySelector('.sheet-handle').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,dpr:devicePixelRatio}})())");
+            JSONObject rect=new JSONObject((String)new JSONTokener(result).nextValue());
+            int[] webOrigin=new int[2];instrumentation.runOnMainSync(() -> activity.getBridge().getWebView().getLocationOnScreen(webOrigin));
+            float x=(float)(rect.getDouble("x")*rect.getDouble("dpr"))+webOrigin[0], y=(float)(rect.getDouble("y")*rect.getDouble("dpr"))+webOrigin[1];
+            long down=SystemClock.uptimeMillis(); send(down,MotionEvent.ACTION_DOWN,1,x,y,0,0);
+            for(int i=1;i<=12;i++){SystemClock.sleep(25);send(down,MotionEvent.ACTION_MOVE,1,x,y+i*8,0,0);}
+            send(down,MotionEvent.ACTION_UP,1,x,y+96,0,0);
+            waitForJs("document.querySelector('.bottom-container').classList.contains('collapsed')");
+            SystemClock.sleep(500);
+            AtomicReference<float[]> center=new AtomicReference<>();
+            instrumentation.runOnMainSync(() -> {
+                int[] origin=new int[2]; activity.getNativeMapPlugin().currentMapView().getLocationOnScreen(origin);
+                center.set(new float[]{origin[0]+activity.getNativeMapPlugin().currentMapView().getWidth()*.45f,origin[1]+activity.getNativeMapPlugin().currentMapView().getHeight()*.5f});
+            });
+            float[] c=center.get();double before=bearing();rotate(c[0],c[1],75,75);SystemClock.sleep(700);
+            assertTrue("Integrated map rotates through real input",Math.abs(((bearing()-before+540)%360)-180)>20);
+            waitForRendering();saveScreenshot("native-integrated-rotated.png");
+            down=SystemClock.uptimeMillis();send(down,MotionEvent.ACTION_DOWN,1,c[0],c[1],0,0);SystemClock.sleep(1000);send(down,MotionEvent.ACTION_UP,1,c[0],c[1],0,0);
+            waitForJs("!!document.querySelector('.water-dialog')");
+            AtomicReference<Boolean> keyboardVisible=new AtomicReference<>(false);
+            instrumentation.runOnMainSync(() -> keyboardVisible.set(activity.getWindow().getDecorView().getRootWindowInsets().isVisible(android.view.WindowInsets.Type.ime())));
+            if(keyboardVisible.get()){instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);SystemClock.sleep(500);}
+            tapWebControl(".water-dialog-actions button:first-child");
+            waitForJs("!document.querySelector('.water-dialog')");
+            tapWebControl(".sheet-handle");
+            waitForJs("!document.querySelector('.bottom-container').classList.contains('collapsed')");
+            saveScreenshot("native-integrated-restored.png");
+        }
+    }
+    private void waitForJs(String expression) throws Exception {
+        long deadline=SystemClock.uptimeMillis()+15000;
+        while(SystemClock.uptimeMillis()<deadline) {
+            if("true".equals(js(expression))) return;
+            SystemClock.sleep(100);
+        }
+        fail("Expected browser state: "+expression);
+    }
     private double bearing() {
         AtomicReference<Double> value=new AtomicReference<>();
         instrumentation.runOnMainSync(() -> value.set(activity.getNativeMapPlugin().currentMap().getCameraPosition().bearing));

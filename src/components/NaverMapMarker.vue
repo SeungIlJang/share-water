@@ -13,6 +13,7 @@ import { buildGpx, createGpxFilename } from '@/utils/gpx.js';
 import { gpxSaveErrorMessage, saveOrShareGpx } from '@/utils/gpxShare.js';
 import { visibleAreaRatio } from '@/utils/visibility.js';
 import { installMapLongPress } from '@/utils/mapLongPress.js';
+import { NativeMap, nativeMapAvailable, measureNativeMap, observeNativeMapBounds } from '@/services/nativeMap.js';
 
 const props = defineProps({
   locations: { type: Array, required: true },
@@ -22,7 +23,21 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['region-changed', 'map-tap', 'info-open-changed', 'add-water']);
+const useNativeMap = import.meta.env.VITE_NATIVE_MAP_ENABLED === 'true'
+  && nativeMapAvailable() && new URLSearchParams(location.search).get('nativeMap') !== 'web';
+const nativeCamera = ref({ latitude: 37.5297, longitude: 126.9647, zoom: 15, bearing: 0 });
+const nativePopup = ref(null);
+const nativeError = ref('');
+const nativeRendered = ref(false);
+const nativeListeners = [];
+let cleanupNativeBounds;
+let nativeMarkerFrame;
+let nativeDisposed = false;
+let nativeMarkerRevision = 0;
+let nativeRenderTimer;
 const map = ref(null);
+const mapPosition = (latitude, longitude) => useNativeMap
+  ? { latitude, longitude } : new naver.maps.LatLng(latitude, longitude);
 const markers = ref({});
 const infoWindows = ref({});
 const mapInitialized = ref(false);
@@ -113,6 +128,7 @@ const smoothMoveMap = (position, zoom = null) => {
 const updateSelectedStyles = (id) => {
   openInfoId.value = id;
   emit('info-open-changed', Boolean(id));
+  if (useNativeMap) { scheduleNativeMarkers(); return; }
   Object.entries(markers.value).forEach(([markerId, marker]) => {
     const selected = String(markerId) === String(id);
     const location = props.locations.find((item) => String(item.id) === String(markerId));
@@ -123,6 +139,7 @@ const updateSelectedStyles = (id) => {
 };
 
 const closeInfoWindows = () => {
+  nativePopup.value = null;
   Object.values(infoWindows.value).forEach((info) => info.close());
   retainedInfoLocation = null;
   updateSelectedStyles(null);
@@ -135,6 +152,15 @@ const findLocation = (id) => props.locations.find((item) => String(item.id) === 
 const showInfoWindow = (id, moveToMarker = true) => {
   const location = findLocation(id);
   closeInfoWindows();
+  if (useNativeMap) {
+    if (!location) return;
+    document.activeElement?.blur?.();
+    retainedInfoLocation = location;
+    nativePopup.value = { content: buildInfoContent(location), x: -1000, y: -1000, openedAt: performance.now() };
+    updateSelectedStyles(id);
+    if (moveToMarker) smoothMoveMap(mapPosition(location.latitude, location.longitude));
+    return;
+  }
   const marker = markers.value[id];
   const info = infoWindows.value[id];
   if (!marker || !info) return;
@@ -146,12 +172,13 @@ const showInfoWindow = (id, moveToMarker = true) => {
 
 const toggleInfoWindow = (id) => {
   document.activeElement?.blur?.();
-  if (infoWindows.value[id]?.getMap()) closeInfoWindows();
+  if (useNativeMap ? String(openInfoId.value) === String(id) : infoWindows.value[id]?.getMap()) closeInfoWindows();
   else showInfoWindow(id);
 };
 
 const renderCurrentLocation = () => {
   if (!map.value || !userPosition.value) return;
+  if (useNativeMap) { void NativeMap.setUserLocation({ position: userPosition.value }).catch(handleNativeError); return; }
   currentLocationMarker.value?.setMap(null);
   currentLocationMarker.value = new naver.maps.Marker({
     position: new naver.maps.LatLng(userPosition.value.latitude, userPosition.value.longitude),
@@ -168,7 +195,7 @@ const showCurrentLocation = async () => {
   try {
     userPosition.value = await getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 });
     renderCurrentLocation();
-    smoothMoveMap(new naver.maps.LatLng(userPosition.value.latitude, userPosition.value.longitude));
+    smoothMoveMap(mapPosition(userPosition.value.latitude, userPosition.value.longitude));
   } catch (error) {
     console.error('현재 위치 조회 실패:', error);
     alert('현재 위치를 가져올 수 없습니다. 위치 권한을 확인해주세요.');
@@ -176,6 +203,7 @@ const showCurrentLocation = async () => {
 };
 
 const createMarkers = () => {
+  if (useNativeMap) { scheduleNativeMarkers(); renderCurrentLocation(); return; }
   const activeInfoId = openInfoId.value;
   const activeInfoLocation = activeInfoId ? findLocation(activeInfoId) : null;
   Object.values(markers.value).forEach((marker) => marker.setMap(null));
@@ -310,6 +338,94 @@ const initMap = async () => {
   createMarkers();
 };
 
+const handleNativeError = (error) => { if (!nativeDisposed) nativeError.value = error?.message || '지도를 불러오지 못했습니다.'; };
+const openWebFallback = async () => {
+  cleanupNativeBounds?.();
+  clearInterval(nativeRenderTimer);
+  await NativeMap.destroy();
+  location.search = '?nativeMap=web';
+};
+const applyNativeCamera = (state) => {
+  if (nativeDisposed) return;
+  nativeCamera.value = { ...nativeCamera.value, ...state };
+  if (nativePopup.value && state.selected && String(state.selected.id) === String(openInfoId.value)) {
+    const viewport = window.visualViewport;
+    const offsetX = viewport?.offsetLeft || 0;
+    nativePopup.value.x = offsetX + Math.max(145, Math.min((viewport?.width || window.innerWidth) - 145, state.selected.x));
+    nativePopup.value.y = state.selected.y + (viewport?.offsetTop || 0);
+    // Allow initial recentering and keyboard dismissal before offscreen checks.
+    if (performance.now() - nativePopup.value.openedAt > 800) checkInfoWindowVisibility();
+  }
+};
+const scheduleNativeMarkers = () => {
+  cancelAnimationFrame(nativeMarkerFrame);
+  const revision = ++nativeMarkerRevision;
+  nativeMarkerFrame = requestAnimationFrame(async () => {
+    if (nativeDisposed || !mapInitialized.value) return;
+    const items = [...(routeFocusMode.value ? routeLocations.value : props.locations)];
+    const retained = openInfoId.value ? findLocation(openInfoId.value) : null;
+    if (retained && !items.some(({ id }) => String(id) === String(retained.id))) items.push(retained);
+    try {
+      const state = await NativeMap.setMarkers({
+        selectedId: openInfoId.value == null ? null : String(openInfoId.value),
+        markers: items.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
+          .map((item) => ({ id: String(item.id), latitude: item.latitude, longitude: item.longitude,
+            title: item.title, approximate: Boolean(item.approximate), order: routeOrder(item.id) })),
+      });
+      if (revision === nativeMarkerRevision) applyNativeCamera(state);
+    } catch (error) { handleNativeError(error); }
+  });
+};
+const initNativeMap = async () => {
+  try {
+    document.documentElement.classList.add('native-map-active');
+    mapDomElement = document.getElementById('map');
+    const clientId = import.meta.env.VITE_NAVER_NATIVE_CLIENT_ID?.trim();
+    if (!clientId) throw new Error('네이티브 지도 인증 설정이 필요합니다.');
+    let position = { latitude: 37.5297, longitude: 126.9647 };
+    try { position = await getCurrentPosition({ timeout: 5000 }); userPosition.value = { ...position }; } catch { /* keep the existing default */ }
+    if (nativeDisposed) return;
+    const handlers = {
+      cameraMove: applyNativeCamera,
+      // Search/result selection moves the camera too. Only a user gesture
+      // changes the search region; otherwise typing would clear its own query.
+      cameraIdle: (state) => { applyNativeCamera(state); if (state.gesture) emitRegionChanged(); },
+      markerTap: (state) => { applyNativeCamera(state); toggleInfoWindow(state.id); },
+      mapTap: handleMapTap,
+      mapLongPress: (point) => { suppressMapTapUntil = Date.now() + 1000; closeInfoWindows(); emit('add-water', point); },
+      authError: handleNativeError,
+    };
+    for (const [name, handler] of Object.entries(handlers)) {
+      const listener = await NativeMap.addListener(name, handler);
+      if (nativeDisposed) { await listener.remove(); return; }
+      nativeListeners.push(listener);
+    }
+    const state = await NativeMap.create({ clientId, ...measureNativeMap(mapDomElement), center: position, zoom: 15, bearing: 0 });
+    if (nativeDisposed) { await NativeMap.destroy(); return; }
+    applyNativeCamera(state);
+    nativeRenderTimer = setInterval(async () => {
+      try {
+        const current = await NativeMap.getState();
+        if (current.loaded && current.fullyRendered) {
+          nativeRendered.value = true;
+          clearInterval(nativeRenderTimer);
+        }
+      } catch { clearInterval(nativeRenderTimer); }
+    }, 250);
+    // Small shared camera facade; all data, GPX, routes and registration stay in this component.
+    map.value = {
+      getCenter: () => ({ lat: () => nativeCamera.value.latitude, lng: () => nativeCamera.value.longitude }),
+      getZoom: () => nativeCamera.value.zoom,
+      panTo: (center) => { void NativeMap.moveCamera({ center }).then(applyNativeCamera).catch(handleNativeError); },
+      setZoom: (zoom) => { void NativeMap.moveCamera({ zoom }).then(applyNativeCamera).catch(handleNativeError); },
+    };
+    cleanupNativeBounds = observeNativeMapBounds(mapDomElement, handleNativeError);
+    mapInitialized.value = true;
+    createMarkers();
+    emitRegionChanged();
+  } catch (error) { handleNativeError(error); }
+};
+
 const showToast = (message) => {
   const toast = document.createElement('div');
   toast.className = 'sw-toast';
@@ -324,6 +440,11 @@ const showToast = (message) => {
 
 const refreshOpenInfoWindow = () => {
   const id = openInfoId.value;
+  if (useNativeMap) {
+    const location = id ? findLocation(id) : null;
+    if (location && nativePopup.value) nativePopup.value.content = buildInfoContent(location);
+    return;
+  }
   if (!id || !infoWindows.value[id]) return;
   const location = findLocation(id);
   if (location) infoWindows.value[id].setContent(buildInfoContent(location));
@@ -379,6 +500,7 @@ const clearDisplayedRoute = () => {
 
 const fitRouteOnMap = (coordinates) => {
   if (!map.value || !coordinates.length) return;
+  if (useNativeMap) { void NativeMap.fitBounds({ points: coordinates }).catch(handleNativeError); return; }
   const bounds = new naver.maps.LatLngBounds();
   coordinates.forEach(({ latitude, longitude }) => {
     bounds.extend(new naver.maps.LatLng(latitude, longitude));
@@ -387,6 +509,13 @@ const fitRouteOnMap = (coordinates) => {
 };
 
 const drawRoute = (result, color = '#087f8c') => {
+  if (useNativeMap) {
+    void NativeMap.setRoute({ points: result.coordinates, color }).catch(handleNativeError);
+    routePolyline = { setMap: () => { void NativeMap.setRoute({ points: [] }).catch(handleNativeError); } };
+    displayedRoute.value = result;
+    fitRouteOnMap(result.coordinates);
+    return;
+  }
   const path = result.coordinates.map(
     ({ latitude, longitude }) => new naver.maps.LatLng(latitude, longitude),
   );
@@ -634,12 +763,13 @@ watch(() => props.selectedId, (id) => {
 
 watch(() => props.center, (center) => {
   if (!center || !map.value) return;
-  smoothMoveMap(new naver.maps.LatLng(center.latitude, center.longitude), 15);
+  smoothMoveMap(mapPosition(center.latitude, center.longitude), 15);
 }, { deep: true });
 
 onMounted(() => {
   registerHelpers();
-  if (window.naver?.maps) initMap();
+  if (useNativeMap) void initNativeMap();
+  else if (window.naver?.maps) initMap();
   else {
     apiTimer = setInterval(() => {
       if (!window.naver?.maps) return;
@@ -651,6 +781,16 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  nativeDisposed = true;
+  clearInterval(nativeRenderTimer);
+  ++nativeMarkerRevision;
+  cancelAnimationFrame(nativeMarkerFrame);
+  cleanupNativeBounds?.();
+  for (const listener of nativeListeners) void listener.remove();
+  if (useNativeMap) {
+    void NativeMap.destroy();
+    document.documentElement.classList.remove('native-map-active');
+  }
   removeMapLongPress?.();
   mapResizeObserver?.disconnect();
   clearTimeout(mapResizeTimer);
@@ -667,9 +807,18 @@ onUnmounted(() => {
 
 <template>
   <div class="map-viewport">
-    <div id="map" class="map-view"></div>
+    <div id="map" class="map-view">
+      <div v-if="useNativeMap" class="native-gesture-target" role="img" aria-label="음수대 지도"></div>
+      <div v-if="useNativeMap && nativePopup" class="native-popup" data-native-map-ui
+        :style="{ left: nativePopup.x + 'px', top: nativePopup.y + 'px' }" v-html="nativePopup.content"></div>
+    </div>
+    <button v-if="useNativeMap" class="native-compass" data-native-map-ui type="button" :aria-label="`지도를 북쪽으로 · ${Math.round(nativeCamera.bearing || 0)}°`" :disabled="!nativeRendered"
+      @click="NativeMap.moveCamera({ bearing: 0 }).catch(handleNativeError)">N · {{ Math.round(nativeCamera.bearing || 0) }}°</button>
+    <div v-if="nativeError" class="native-map-error" data-native-map-ui role="alert">
+      <p>{{ nativeError }}</p><a href="?nativeMap=web" @click.prevent="openWebFallback">기존 웹 지도로 열기</a>
+    </div>
   </div>
-  <div v-if="routeLocations.length && !openInfoId" class="route-panel">
+  <div v-if="routeLocations.length && !openInfoId" class="route-panel" data-native-map-ui>
     <div class="route-summary">
       <strong v-if="automaticCourse">GPX 왕복 코스 · 음수대 {{ routeLocations.length }}곳</strong>
       <strong v-else>{{ routeLocations.length === 1 ? '경로 이어하기' : `선택 경로 ${routeLocations.length}곳` }}</strong>
@@ -707,8 +856,8 @@ onUnmounted(() => {
       >{{ gpxSharing ? '준비중' : 'GPX' }}</button>
     </div>
   </div>
-  <button class="gpx-open-btn" type="button" @click="openGpxPanel">GPX</button>
-  <div v-if="gpxPanelOpen" class="gpx-dialog-backdrop" @click.self="gpxPanelOpen = false">
+  <button class="gpx-open-btn" data-native-map-ui type="button" @click="openGpxPanel">GPX</button>
+  <div v-if="gpxPanelOpen" class="gpx-dialog-backdrop" data-native-map-ui @click.self="gpxPanelOpen = false">
     <section class="gpx-dialog" role="dialog" aria-modal="true" aria-labelledby="gpx-dialog-title">
       <button class="gpx-close-btn" type="button" aria-label="닫기" @click="gpxPanelOpen = false">×</button>
       <h2 id="gpx-dialog-title">음수대 왕복 코스 만들기</h2>
@@ -731,7 +880,7 @@ onUnmounted(() => {
       <small>실제 보행로에 따라 완성 거리는 목표와 다를 수 있습니다.</small>
     </section>
   </div>
-  <button class="current-location-btn" type="button" title="현재 위치로 이동" @click="showCurrentLocation">
+  <button class="current-location-btn" data-native-map-ui type="button" title="현재 위치로 이동" @click="showCurrentLocation">
     <span></span>
   </button>
 </template>
@@ -802,6 +951,14 @@ onUnmounted(() => {
 </style>
 
 <style>
+html.native-map-active, html.native-map-active body, html.native-map-active #app,
+html.native-map-active .container { background: transparent !important; }
+html.native-map-active input, html.native-map-active textarea, html.native-map-active select { font-size: 16px !important; }
+.native-popup { position: fixed; z-index: 350; width: 280px; transform: translate(-50%, calc(-100% - 52px)); }
+.native-gesture-target { position: absolute; top: 140px; bottom: 100px; left: 24px; right: 100px; }
+.native-compass { position: absolute; right: 16px; bottom: 88px; z-index: 300; background: white; color: #087f8c; border: 1px solid #b7dce2; border-radius: 20px; padding: 10px; }
+.native-map-error { position: absolute; top: 80px; left: 16px; right: 16px; z-index: 400; padding: 12px; background: white; border: 1px solid #e88; border-radius: 12px; }
+
 .sw-toast { position: fixed; z-index: 3000; bottom: 90px; left: 50%; padding: 10px 17px; border-radius: 22px; background: rgba(0,0,0,.82); color: white; opacity: 0; transform: translate(-50%, 10px); transition: .25s; }
 .sw-toast.show { opacity: 1; transform: translate(-50%, 0); }
 </style>

@@ -37,6 +37,7 @@ import org.json.JSONObject;
 /** Native map stays behind a transparent WebView; Activity routes map-only gestures here. */
 @CapacitorPlugin(name = "WaterNativeMap")
 public class NativeNaverMapPlugin extends Plugin {
+    private boolean cameraGesture = false;
     private FrameLayout host;
     private MapView mapView;
     private NaverMap map;
@@ -90,8 +91,15 @@ public class NativeNaverMapPlugin extends Plugin {
                     map.getUiSettings().setLogoGravity(Gravity.BOTTOM | Gravity.START);
                     map.setCameraPosition(new CameraPosition(coordinate(call.getObject("center")),
                         number(call.getDouble("zoom"), 15), 0, number(call.getDouble("bearing"), 0)));
-                    map.addOnCameraChangeListener((reason, animated) -> notifyListeners("cameraMove", state()));
-                    map.addOnCameraIdleListener(() -> notifyListeners("cameraIdle", state()));
+                    map.addOnCameraChangeListener((reason, animated) -> {
+                        cameraGesture = reason == CameraUpdate.REASON_GESTURE;
+                        notifyListeners("cameraMove", state());
+                    });
+                    map.addOnCameraIdleListener(() -> {
+                        JSObject data = state(); data.put("gesture", cameraGesture);
+                        cameraGesture = false;
+                        notifyListeners("cameraIdle", data);
+                    });
                     map.setOnMapClickListener((point, coord) -> notifyListeners("mapTap", location(coord)));
                     map.setOnMapLongClickListener((point, coord) -> notifyListeners("mapLongPress", location(coord)));
                     call.resolve(state());
@@ -193,7 +201,7 @@ public class NativeNaverMapPlugin extends Plugin {
             String id=item.optString("id");
             Marker marker=new Marker();
             marker.setPosition(new LatLng(item.optDouble("latitude"),item.optDouble("longitude")));
-            marker.setIcon(OverlayImage.fromBitmap(markerBitmap(id.equals(selectedId),item.optInt("order",0))));
+            marker.setIcon(OverlayImage.fromBitmap(markerBitmap(id.equals(selectedId),item.optBoolean("approximate",false),item.optInt("order",0))));
             marker.setWidth(42); marker.setHeight(48); marker.setAnchor(new PointF(.5f,1));
             marker.setFlat(false); marker.setAngle(0);
             marker.setCaptionText(item.optString("title")); marker.setCaptionTextSize(11);
@@ -203,7 +211,7 @@ public class NativeNaverMapPlugin extends Plugin {
         }
         call.resolve(state());
     }); }
-    private Bitmap markerBitmap(boolean selected,int order) {
+    private Bitmap markerBitmap(boolean selected,boolean approximate,int order) {
         Bitmap bitmap=Bitmap.createBitmap(96,112,Bitmap.Config.ARGB_8888);
         Canvas canvas=new Canvas(bitmap); Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
         Path drop=new Path(); drop.moveTo(48,108); drop.cubicTo(39,94,6,74,6,49); drop.cubicTo(6,-9,90,-9,90,49); drop.cubicTo(90,74,57,94,48,108);
@@ -211,6 +219,7 @@ public class NativeNaverMapPlugin extends Plugin {
         paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(selected?7:4);paint.setColor(Color.rgb(10,147,162));canvas.drawPath(drop,paint);
         paint.setStyle(Paint.Style.FILL);paint.setColor(Color.rgb(10,174,205));
         Path water=new Path();water.moveTo(48,20);water.cubicTo(42,37,31,45,31,57);water.cubicTo(31,82,65,82,65,57);water.cubicTo(65,45,54,37,48,20);canvas.drawPath(water,paint);
+        if(approximate){paint.setColor(Color.WHITE);canvas.drawCircle(48,51,26,paint);paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(38);canvas.drawText("🏞️",48,66,paint);}
         if(order>0){paint.setColor(Color.rgb(239,63,67));canvas.drawCircle(75,20,17,paint);paint.setColor(Color.WHITE);paint.setTextAlign(Paint.Align.CENTER);paint.setTextSize(24);paint.setFakeBoldText(true);canvas.drawText(String.valueOf(order),75,28,paint);}
         return bitmap;
     }
@@ -220,7 +229,7 @@ public class NativeNaverMapPlugin extends Plugin {
         if(map!=null && points.length()>=2){
             List<LatLng> coords=new ArrayList<>();
             for(int i=0;i<points.length();i++){JSONObject p=points.optJSONObject(i);if(p!=null)coords.add(new LatLng(p.optDouble("latitude"),p.optDouble("longitude")));}
-            route=new PolylineOverlay();route.setCoords(coords);route.setWidth(6);route.setColor(Color.rgb(8,127,140));route.setMap(map);
+            route=new PolylineOverlay();route.setCoords(coords);route.setWidth(7);String color=call.getString("color","#087f8c");route.setColor(color.matches("#[0-9a-fA-F]{6}")?Color.parseColor(color):Color.rgb(8,127,140));route.setMap(map);
         }
         call.resolve();
     }); }

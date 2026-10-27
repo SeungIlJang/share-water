@@ -301,7 +301,7 @@ onUnmounted(() => {
 
 <template>
   <main class="container">
-    <div v-if="updateMessage" class="update-overlay" role="status" aria-live="polite">
+    <div v-if="updateMessage" class="update-overlay" data-native-map-ui role="status" aria-live="polite">
       <div class="update-card">
         <span class="update-spinner" aria-hidden="true"></span>
         <strong>{{ updateMessage }}</strong>
@@ -319,10 +319,10 @@ onUnmounted(() => {
         @info-open-changed="mapInfoOpen = $event"
         @add-water="openAddWater"
       />
-      <div v-if="!mapInfoOpen" class="brand-badge"><span>💧</span> 모두의 음수대</div>
+      <div v-if="!mapInfoOpen" class="brand-badge" data-native-map-ui><span>💧</span> 모두의 음수대</div>
     </section>
 
-    <section class="bottom-container" :class="{ expanded: sheetExpanded, collapsed: sheetCollapsed }">
+    <section class="bottom-container" data-native-map-ui :class="{ expanded: sheetExpanded, collapsed: sheetCollapsed }">
       <button
         class="sheet-handle"
         type="button"
@@ -436,7 +436,7 @@ onUnmounted(() => {
         <div v-else class="empty">조건에 맞는 음수대가 없습니다.</div>
       </div>
     </section>
-    <div v-if="addWaterPosition" class="water-dialog-backdrop" @click.self="!isSavingWater && (addWaterPosition = null)" @keydown.esc="!isSavingWater && (addWaterPosition = null)">
+    <div v-if="addWaterPosition" class="water-dialog-backdrop" data-native-map-ui @click.self="!isSavingWater && (addWaterPosition = null)" @keydown.esc="!isSavingWater && (addWaterPosition = null)">
       <form class="water-dialog" role="dialog" aria-modal="true" aria-labelledby="add-water-title" @submit.prevent="addWater">
         <h2 id="add-water-title">이 위치에 음수대 추가</h2>
         <p>등록한 이름·위치·메모가 모든 사용자에게 공개됩니다.<br>실제 음수대만 등록해 주세요. 등록한 기기에서 삭제할 수 있습니다.</p>
@@ -447,7 +447,7 @@ onUnmounted(() => {
         <div class="water-dialog-actions"><button type="button" :disabled="isSavingWater" @click="addWaterPosition = null">취소</button><button class="primary" type="submit" :disabled="isSavingWater">{{ isSavingWater ? '공유 중…' : '전체 공개로 추가' }}</button></div>
       </form>
     </div>
-    <div v-if="deleteWaterId" class="water-dialog-backdrop" @click.self="deleteWaterId = null" @keydown.esc="deleteWaterId = null">
+    <div v-if="deleteWaterId" class="water-dialog-backdrop" data-native-map-ui @click.self="deleteWaterId = null" @keydown.esc="deleteWaterId = null">
       <section class="water-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-water-title">
         <h2 id="delete-water-title">직접 추가한 음수대를 삭제할까요?</h2>
         <p>공유한 음수대는 모든 사용자의 목록에서 삭제됩니다. 공공데이터는 변경되지 않습니다.</p>

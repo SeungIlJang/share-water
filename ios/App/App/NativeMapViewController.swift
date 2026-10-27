@@ -1,32 +1,25 @@
 import UIKit
 import Capacitor
 import WebKit
-
-/// WebKit/automation can hit-test the WebView directly instead of its container.
-final class NativeMapWebView: WKWebView {
-    weak var nativeMapPlugin: WaterNativeMapPlugin?
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        if let target = nativeMapPlugin?.nativeTarget(at: point, in: self, event: event) { return target }
-        return super.hitTest(point, with: event)
-    }
-}
-
 /// Routes an entire UIKit touch sequence to the native view selected on touch-down.
 final class NativeMapTouchContainer: UIView {
     weak var plugin: WaterNativeMapPlugin?
+    weak var webSurface: WKWebView?
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard self.point(inside: point, with: event) else { return nil }
         if let target = plugin?.nativeTarget(at: point, in: self, event: event) { return target }
+        // A control exclusion means web ownership, not permission for UIKit to
+        // walk through a transparent WebView and rediscover the native sibling.
+        if let web = webSurface {
+            let target = web.scrollView.hitTest(convert(point, to: web.scrollView), with: event) ?? web
+            return target
+        }
         return super.hitTest(point, with: event)
     }
 }
 
 @objc(NativeMapViewController)
 class NativeMapViewController: CAPBridgeViewController {
-    override func webView(with frame: CGRect, configuration: WKWebViewConfiguration) -> WKWebView {
-        let web = NativeMapWebView(frame: frame, configuration: configuration)
-        web.isMultipleTouchEnabled = true
-        return web
-    }
     override func capacitorDidLoad() {
         let original = view!
         let container = NativeMapTouchContainer(frame: original.frame)
@@ -37,7 +30,7 @@ class NativeMapViewController: CAPBridgeViewController {
         view = container
         let plugin = WaterNativeMapPlugin()
         container.plugin = plugin
-        (webView as? NativeMapWebView)?.nativeMapPlugin = plugin
+        container.webSurface = webView
         bridge?.registerPluginInstance(plugin)
     }
 }

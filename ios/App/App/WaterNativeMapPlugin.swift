@@ -15,6 +15,8 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
     private var excluded: [CGRect] = []
     private var viewportWidth: CGFloat = 390
     private var selectedID: String?
+    private var pendingLongPress: JSObject?
+    private var cameraGesture = false
     private var map: NMFMapView? { native?.mapView }
     private var ratio: CGFloat { (bridge?.webView?.bounds.width ?? viewportWidth) / max(1, viewportWidth) }
 
@@ -49,6 +51,9 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
         }
         excluded = (call.getArray("excludedRects", JSObject.self) ?? []).map(rectangle)
         guard let native = native, let web = bridge?.webView, let parent = native.superview else { return }
+        // A modal owns the whole map region. Disable the SDK's recognizers too,
+        // not just point hit-testing, until the modal releases that ownership.
+        native.isUserInteractionEnabled = !excluded.contains { $0.insetBy(dx: -1, dy: -1).contains(bounds) }
         let cssFrame = CGRect(x: bounds.minX * ratio, y: bounds.minY * ratio, width: bounds.width * ratio, height: bounds.height * ratio)
         let frame = web.convert(cssFrame, to: parent)
         if native.frame != frame { native.frame = frame; native.layoutIfNeeded() }
@@ -99,6 +104,11 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
             native.mapView.positionMode = .normal
             native.mapView.touchDelegate = self
             native.mapView.addCameraDelegate(delegate: self)
+            // The SDK reports a long tap at .began. Open the web form only after
+            // release, so that the originating touch cannot fall into its fields.
+            for recognizer in native.mapView.gestureRecognizers ?? [] where recognizer is UILongPressGestureRecognizer {
+                recognizer.addTarget(self, action: #selector(self.finishLongPress(_:)))
+            }
             self.readBounds(call)
             let position = NMFCameraPosition(self.coordinate(call.getObject("center")), zoom: call.getDouble("zoom") ?? 15, tilt: 0, heading: call.getDouble("bearing") ?? 0)
             native.mapView.moveCamera(NMFCameraUpdate(position: position))
@@ -127,7 +137,7 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
         for item in call.getArray("markers", JSObject.self) ?? [] {
             guard let id = item["id"] as? String else { continue }
             let marker = NMFMarker(position: self.coordinate(item))
-            marker.iconImage = NMFOverlayImage(image: self.markerImage(selected: id == self.selectedID, order: item["order"] as? Int ?? 0))
+            marker.iconImage = NMFOverlayImage(image: self.markerImage(selected: id == self.selectedID, approximate: item["approximate"] as? Bool ?? false, order: item["order"] as? Int ?? 0))
             marker.width = 42; marker.height = 48; marker.anchor = CGPoint(x: 0.5, y: 1)
             marker.isFlat = false; marker.angle = 0
             marker.captionText = item["title"] as? String ?? ""
@@ -143,7 +153,7 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
         }
         call.resolve(self.state())
     } }
-    private func markerImage(selected: Bool, order: Int) -> UIImage {
+    private func markerImage(selected: Bool, approximate: Bool, order: Int) -> UIImage {
         UIGraphicsImageRenderer(size: CGSize(width: 48, height: 56)).image { context in
             let path = UIBezierPath()
             path.move(to: CGPoint(x: 24, y: 54))
@@ -152,7 +162,8 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
             path.addCurve(to: CGPoint(x: 24, y: 54), controlPoint1: CGPoint(x: 45, y: 37), controlPoint2: CGPoint(x: 28.5, y: 47))
             (selected ? UIColor(red: 0.85, green: 0.96, blue: 0.98, alpha: 1) : .white).setFill(); path.fill()
             UIColor.systemTeal.setStroke(); path.lineWidth = selected ? 3.5 : 2; path.stroke()
-            let text = order > 0 ? "💧\(order)" : "💧"
+            let glyph = approximate ? "🏞️" : "💧"
+            let text = order > 0 ? "\(glyph)\(order)" : glyph
             (text as NSString).draw(in: CGRect(x: 9, y: 13, width: 35, height: 26), withAttributes: [.font: UIFont.systemFont(ofSize: 18)])
         }
     }
@@ -161,7 +172,13 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
         let points = (call.getArray("points", JSObject.self) ?? []).map(self.coordinate)
         if let map = self.map, points.count >= 2 {
             let route = NMFPolylineOverlay(points)
-            route?.width = 6; route?.color = UIColor(red: 0.03, green: 0.5, blue: 0.55, alpha: 1)
+            route?.width = 7
+            let hex = call.getString("color") ?? "#087f8c"
+            var rgb: UInt64 = 0x087f8c
+            if hex.range(of: "^#[0-9a-fA-F]{6}$", options: .regularExpression) != nil {
+                Scanner(string: String(hex.dropFirst())).scanHexInt64(&rgb)
+            }
+            route?.color = UIColor(red: CGFloat((rgb >> 16) & 255)/255, green: CGFloat((rgb >> 8) & 255)/255, blue: CGFloat(rgb & 255)/255, alpha: 0.92)
             route?.mapView = map; self.route = route
         }
         call.resolve()
@@ -174,7 +191,7 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
     private func dispose() {
         map?.removeCameraDelegate(delegate: self); map?.touchDelegate = nil
         markers.values.forEach { $0.mapView = nil }; markers.removeAll()
-        route?.mapView = nil; route = nil; selectedID = nil
+        route?.mapView = nil; route = nil; selectedID = nil; pendingLongPress = nil
         native?.removeFromSuperview(); native = nil
         if NMFAuthManager.shared().delegate === self { NMFAuthManager.shared().delegate = nil }
     }
@@ -182,9 +199,28 @@ public class WaterNativeMapPlugin: CAPPlugin, CAPBridgedPlugin, NMFMapViewTouchD
         if let error = error as NSError? { notifyListeners("authError", data: ["code": String(error.code), "message": "네이버 모바일 지도 인증 설정을 확인해 주세요."]) }
     }
     @objc(mapView:cameraIsChangingByReason:)
-    public func mapView(_ mapView: NMFMapView, cameraIsChangingByReason reason: Int) { notifyListeners("cameraMove", data: state()) }
+    public func mapView(_ mapView: NMFMapView, cameraIsChangingByReason reason: Int) {
+        cameraGesture = reason == NMFMapChangedByGesture
+        notifyListeners("cameraMove", data: state())
+    }
     @objc(mapViewCameraIdle:)
-    public func mapViewCameraIdle(_ mapView: NMFMapView) { notifyListeners("cameraIdle", data: state()) }
+    public func mapViewCameraIdle(_ mapView: NMFMapView) {
+        var data = state(); data["gesture"] = cameraGesture
+        cameraGesture = false
+        notifyListeners("cameraIdle", data: data)
+    }
     public func mapView(_ mapView: NMFMapView, didTapMap latlng: NMGLatLng, point: CGPoint) { notifyListeners("mapTap", data: location(latlng)) }
-    public func mapView(_ mapView: NMFMapView, didLongTapMap latlng: NMGLatLng, point: CGPoint) { notifyListeners("mapLongPress", data: location(latlng)) }
+    public func mapView(_ mapView: NMFMapView, didLongTapMap latlng: NMGLatLng, point: CGPoint) { pendingLongPress = location(latlng) }
+    @objc private func finishLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        if recognizer.state == .ended, let position = pendingLongPress {
+            pendingLongPress = nil
+            // .ended is still inside UIKit's original touch dispatch. Let that
+            // sequence finish before showing HTML fields under the lifted finger.
+            let activeMap = native
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                guard let self = self, let activeMap = activeMap, self.native === activeMap else { return }
+                self.notifyListeners("mapLongPress", data: position)
+            }
+        } else if recognizer.state == .cancelled || recognizer.state == .failed { pendingLongPress = nil }
+    }
 }

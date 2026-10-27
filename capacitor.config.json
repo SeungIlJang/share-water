@@ -11,7 +11,18 @@
       "resetWhenUpdate": true
     },
     "Geolocation": {
-      "permissions": ["location"]
+      "permissions": [
+        "location"
+      ]
     }
+  },
+  "ios": {
+    "includePlugins": [
+      "@capacitor/app-launcher",
+      "@capacitor/filesystem",
+      "@capacitor/geolocation",
+      "@capacitor/share"
+    ],
+    "scrollEnabled": false
   }
 }
