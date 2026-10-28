@@ -72,8 +72,8 @@ def check():
     if not same:
         raise ValueError('Xcode preference cache differs from disk. Inspect/reopen Xcode before requesting sign-in; never overwrite either account store.')
     if not current:
-        raise ValueError('No Xcode account is saved. App Store Connect browser login is independent.')
-    print('Local account checks passed. Verify cloud authentication separately by export/upload, not account count.', flush=True)
+        print('Legacy preference account count is zero; this is not proof of logout. Check Xcode Apple Accounts UI and use the actual export result. No account settings were changed.', flush=True)
+    print('Local execution-context checks passed. Verify cloud authentication separately by export/upload, not account count.', flush=True)
     return developer, env
 
 
