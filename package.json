@@ -26,7 +26,9 @@
     "android:aab": "npm run cap:sync && cd android && ./gradlew bundleRelease",
     "android:release:check": "npm run cap:sync && cd android && ./gradlew lintRelease bundleRelease",
     "build:native-integrated": "VITE_NATIVE_MAP_ENABLED=true VITE_NATIVE_MAP_PROOF=false VITE_LIVE_UPDATE_ENABLED=false VITE_ADMOB_LIVE=false vite build",
-    "build:ios:store": "VITE_NATIVE_MAP_ENABLED=true VITE_NATIVE_MAP_PROOF=false VITE_LIVE_UPDATE_ENABLED=false VITE_ADMOB_LIVE=false vite build"
+    "build:ios:store": "VITE_NATIVE_MAP_ENABLED=true VITE_NATIVE_MAP_PROOF=false VITE_LIVE_UPDATE_ENABLED=false VITE_ADMOB_LIVE=false vite build",
+    "ios:store:preflight": "python3 scripts/ios-store-preflight.py",
+    "ios:store:xcodebuild": "python3 scripts/ios-store-preflight.py --"
   },
   "dependencies": {
     "@capacitor-community/admob": "^6.2.0",
