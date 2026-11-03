@@ -37,6 +37,8 @@ import org.json.JSONObject;
 /** Native map stays behind a transparent WebView; Activity routes map-only gestures here. */
 @CapacitorPlugin(name = "WaterNativeMap")
 public class NativeNaverMapPlugin extends Plugin {
+    private static final float MARKER_WIDTH_DP = 42f;
+    private static final float MARKER_HEIGHT_DP = 48f;
     private boolean cameraGesture = false;
     private FrameLayout host;
     private MapView mapView;
@@ -53,6 +55,7 @@ public class NativeNaverMapPlugin extends Plugin {
     @Override public void load() { ((MainActivity)getActivity()).attachNativeMap(this); }
     NaverMap currentMap() { return map; }
     MapView currentMapView() { return mapView; }
+    int[] configuredMarkerSize() { return new int[]{dp(MARKER_WIDTH_DP), dp(MARKER_HEIGHT_DP)}; }
 
     @PluginMethod public void create(PluginCall call) {
         String clientId = call.getString("clientId", "");
@@ -132,6 +135,8 @@ public class NativeNaverMapPlugin extends Plugin {
         return result;
     }
     private float scale() { return (float)(getBridge().getWebView().getWidth() / Math.max(1, viewportWidth)); }
+    private float displayDensity() { return getContext().getResources().getDisplayMetrics().density; }
+    private int dp(float value) { return Math.max(1, Math.round(value * displayDensity())); }
     private void readBounds(JSObject bounds) {
         if (bounds == null) return;
         viewportWidth = bounds.optDouble("viewportWidth", 390);
@@ -202,7 +207,7 @@ public class NativeNaverMapPlugin extends Plugin {
             Marker marker=new Marker();
             marker.setPosition(new LatLng(item.optDouble("latitude"),item.optDouble("longitude")));
             marker.setIcon(OverlayImage.fromBitmap(markerBitmap(id.equals(selectedId),item.optBoolean("approximate",false),item.optInt("order",0))));
-            marker.setWidth(42); marker.setHeight(48); marker.setAnchor(new PointF(.5f,1));
+            int[] markerSize=configuredMarkerSize(); marker.setWidth(markerSize[0]); marker.setHeight(markerSize[1]); marker.setAnchor(new PointF(.5f,1));
             marker.setFlat(false); marker.setAngle(0);
             marker.setCaptionText(item.optString("title")); marker.setCaptionTextSize(11);
             marker.setCaptionMinZoom(15); marker.setZIndex(id.equals(selectedId)?300:100);

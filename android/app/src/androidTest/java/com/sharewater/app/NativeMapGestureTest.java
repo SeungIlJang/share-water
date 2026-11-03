@@ -117,6 +117,11 @@ public class NativeMapGestureTest {
             }
             assertNotNull("Integrated native map must initialize",activity.getNativeMapPlugin().currentMap());
             waitForRendering();
+            AtomicReference<int[]> markerSize=new AtomicReference<>();
+            instrumentation.runOnMainSync(() -> markerSize.set(activity.getNativeMapPlugin().configuredMarkerSize()));
+            double density=numberFromJs("window.devicePixelRatio");
+            assertEquals("Marker width must remain 42 CSS pixels on a high-density Android display",42*density,markerSize.get()[0],2);
+            assertEquals("Marker height must remain 48 CSS pixels on a high-density Android display",48*density,markerSize.get()[1],2);
             saveScreenshot("native-integrated-initial.png");
             tapWebControl(".gpx-open-btn");
             waitForJs("!!document.querySelector('.gpx-dialog')");
