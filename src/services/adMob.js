@@ -18,9 +18,10 @@ const configuredBannerId = import.meta.env.VITE_ADMOB_BANNER_ID || PRODUCTION_BA
 const bannerId = liveAdsEnabled ? configuredBannerId : TEST_BANNER_ID
 // ⚠️ 광고 전면 중단 (2026-11-03 ~ 2026-12-02 AdMob 계정 정지)
 // 무효 트래픽으로 정지됐고, 기간 중 추가 위반이면 영구 정지라 광고 요청 자체를 끊어 둔다.
-// 이 앱의 OTA 번들은 Cloudflare Pages(share-water-ota.pages.dev)에 있고 깃 푸시로는
-// 배포되지 않는다. 코드를 고친 뒤 `npm run ota:deploy` 를 돌려야 실제 앱에 내려간다.
-// 12/2 이후 되살릴 때도 ADS_ENABLED 를 true 로 바꾸고 같은 명령을 돌릴 것.
+// 이 앱의 OTA 번들은 Cloudflare Pages(share-water-ota.pages.dev)에 있다. 다만 배포는
+// .github/workflows/deploy-ota.yml 이 main 푸시마다 대신 해준다(CLOUDFLARE_API_TOKEN
+// 시크릿 사용). 로컬에서 `npm run ota:deploy` 를 돌릴 필요는 없다.
+// 12/2 이후 되살리려면 ADS_ENABLED 를 true 로 바꿔 main 에 푸시하면 된다.
 const ADS_ENABLED = false
 const adsEnabled = ADS_ENABLED && (testAdsEnabled || (liveAdsEnabled && Boolean(configuredBannerId)))
 
