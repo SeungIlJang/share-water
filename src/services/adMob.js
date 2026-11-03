@@ -16,7 +16,13 @@ const liveAdsEnabled = import.meta.env.VITE_ADMOB_LIVE !== 'false'
 const testAdsEnabled = import.meta.env.DEV || import.meta.env.VITE_ADMOB_TEST === 'true'
 const configuredBannerId = import.meta.env.VITE_ADMOB_BANNER_ID || PRODUCTION_BANNER_ID
 const bannerId = liveAdsEnabled ? configuredBannerId : TEST_BANNER_ID
-const adsEnabled = testAdsEnabled || (liveAdsEnabled && Boolean(configuredBannerId))
+// ⚠️ 광고 전면 중단 (2026-11-03 ~ 2026-12-02 AdMob 계정 정지)
+// 무효 트래픽으로 정지됐고, 기간 중 추가 위반이면 영구 정지라 광고 요청 자체를 끊어 둔다.
+// 이 앱의 OTA 번들은 Cloudflare Pages(share-water-ota.pages.dev)에 있고 깃 푸시로는
+// 배포되지 않는다. 코드를 고친 뒤 `npm run ota:deploy` 를 돌려야 실제 앱에 내려간다.
+// 12/2 이후 되살릴 때도 ADS_BLACKOUT 를 false 로 바꾸고 같은 명령을 돌릴 것.
+const ADS_BLACKOUT = true
+const adsEnabled = !ADS_BLACKOUT && (testAdsEnabled || (liveAdsEnabled && Boolean(configuredBannerId)))
 
 let initialized = false
 
