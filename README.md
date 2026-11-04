@@ -63,9 +63,11 @@ Android 네이티브 앱은 최초 1회 OTA 기능이 포함된 AAB를 설치한
 다운로드한 번들은 앱을 다시 실행할 때 적용합니다.
 
 ```bash
-LIVE_UPDATE_ORIGIN=https://share-water-ota.pages.dev npm run build
-npx wrangler pages deploy dist --project-name share-water-ota --branch main
+npm run ota:deploy
 ```
+
+운영 OTA와 Android Store 빌드는 네이티브 지도와 업데이트 확인 코드를 모두 포함하며,
+빌드 직후 `verify:android:store-assets`가 두 기능의 번들 포함 여부를 검사합니다.
 현장 운영 여부와 수질 상태는 계절·시설 사정에 따라 달라질 수 있습니다.
 
 ## 실행
