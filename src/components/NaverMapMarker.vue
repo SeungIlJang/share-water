@@ -13,7 +13,14 @@ import { buildGpx, createGpxFilename } from '@/utils/gpx.js';
 import { gpxSaveErrorMessage, saveOrShareGpx } from '@/utils/gpxShare.js';
 import { visibleAreaRatio } from '@/utils/visibility.js';
 import { installMapLongPress } from '@/utils/mapLongPress.js';
-import { NativeMap, nativeMapAvailable, clampNativePopup, measureNativeMap, observeNativeMapBounds } from '@/services/nativeMap.js';
+import {
+  NativeMap,
+  nativeMapAvailable,
+  clampNativePopup,
+  createNativeCameraMoveGuard,
+  measureNativeMap,
+  observeNativeMapBounds,
+} from '@/services/nativeMap.js';
 
 const props = defineProps({
   locations: { type: Array, required: true },
@@ -35,6 +42,7 @@ let nativeMarkerFrame;
 let nativeDisposed = false;
 let nativeMarkerRevision = 0;
 let nativeRenderTimer;
+const nativeCameraMoveGuard = createNativeCameraMoveGuard();
 const map = ref(null);
 const mapPosition = (latitude, longitude) => useNativeMap
   ? { latitude, longitude } : new naver.maps.LatLng(latitude, longitude);
@@ -360,6 +368,18 @@ const applyNativeCamera = (state) => {
     if (performance.now() - nativePopup.value.openedAt > 800) checkInfoWindowVisibility();
   }
 };
+const runNativeCameraCommand = async (command) => {
+  const state = await nativeCameraMoveGuard.run(command);
+  applyNativeCamera(state);
+  return state;
+};
+const handleNativeCameraMove = (state) => {
+  if (nativePopup.value && nativeCameraMoveGuard.isUserMove()) {
+    closeInfoWindows();
+    return;
+  }
+  applyNativeCamera(state);
+};
 const scheduleNativeMarkers = () => {
   cancelAnimationFrame(nativeMarkerFrame);
   const revision = ++nativeMarkerRevision;
@@ -389,7 +409,7 @@ const initNativeMap = async () => {
     try { position = await getCurrentPosition({ timeout: 5000 }); userPosition.value = { ...position }; } catch { /* keep the existing default */ }
     if (nativeDisposed) return;
     const handlers = {
-      cameraMove: applyNativeCamera,
+      cameraMove: handleNativeCameraMove,
       // Search/result selection moves the camera too. Only a user gesture
       // changes the search region; otherwise typing would clear its own query.
       cameraIdle: (state) => { applyNativeCamera(state); if (state.gesture) emitRegionChanged(); },
@@ -419,8 +439,8 @@ const initNativeMap = async () => {
     map.value = {
       getCenter: () => ({ lat: () => nativeCamera.value.latitude, lng: () => nativeCamera.value.longitude }),
       getZoom: () => nativeCamera.value.zoom,
-      panTo: (center) => { void NativeMap.moveCamera({ center }).then(applyNativeCamera).catch(handleNativeError); },
-      setZoom: (zoom) => { void NativeMap.moveCamera({ zoom }).then(applyNativeCamera).catch(handleNativeError); },
+      panTo: (center) => { void runNativeCameraCommand(() => NativeMap.moveCamera({ center })).catch(handleNativeError); },
+      setZoom: (zoom) => { void runNativeCameraCommand(() => NativeMap.moveCamera({ zoom })).catch(handleNativeError); },
     };
     cleanupNativeBounds = observeNativeMapBounds(mapDomElement, handleNativeError);
     mapInitialized.value = true;
@@ -439,6 +459,10 @@ const showToast = (message) => {
     toast.classList.remove('show');
     setTimeout(() => toast.remove(), 250);
   }, 1400);
+};
+
+const resetNativeBearing = () => {
+  void runNativeCameraCommand(() => NativeMap.moveCamera({ bearing: 0 })).catch(handleNativeError);
 };
 
 const refreshOpenInfoWindow = () => {
@@ -503,7 +527,7 @@ const clearDisplayedRoute = () => {
 
 const fitRouteOnMap = (coordinates) => {
   if (!map.value || !coordinates.length) return;
-  if (useNativeMap) { void NativeMap.fitBounds({ points: coordinates }).catch(handleNativeError); return; }
+  if (useNativeMap) { void runNativeCameraCommand(() => NativeMap.fitBounds({ points: coordinates })).catch(handleNativeError); return; }
   const bounds = new naver.maps.LatLngBounds();
   coordinates.forEach(({ latitude, longitude }) => {
     bounds.extend(new naver.maps.LatLng(latitude, longitude));
@@ -816,7 +840,7 @@ onUnmounted(() => {
         :style="{ left: nativePopup.x + 'px', top: nativePopup.y + 'px' }" v-html="nativePopup.content"></div>
     </div>
     <button v-if="useNativeMap" class="native-compass" data-native-map-ui type="button" :aria-label="`지도를 북쪽으로 · ${Math.round(nativeCamera.bearing || 0)}°`" :disabled="!nativeRendered"
-      @click="NativeMap.moveCamera({ bearing: 0 }).catch(handleNativeError)">N · {{ Math.round(nativeCamera.bearing || 0) }}°</button>
+      @click="resetNativeBearing">N · {{ Math.round(nativeCamera.bearing || 0) }}°</button>
     <div v-if="nativeError" class="native-map-error" data-native-map-ui role="alert">
       <p>{{ nativeError }}</p><a href="?nativeMap=web" @click.prevent="openWebFallback">기존 웹 지도로 열기</a>
     </div>

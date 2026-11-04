@@ -123,6 +123,19 @@ public class NativeMapGestureTest {
             assertEquals("Marker width must remain 42 CSS pixels on a high-density Android display",42*density,markerSize.get()[0],2);
             assertEquals("Marker height must remain 48 CSS pixels on a high-density Android display",48*density,markerSize.get()[1],2);
             saveScreenshot("native-integrated-initial.png");
+            assertEquals("true",js("(()=>{const item=document.querySelector('.location-item');if(!item)return false;item.click();return true})()"));
+            waitForJs("!!document.querySelector('.native-popup')");
+            SystemClock.sleep(400);
+            assertTrue("Programmatic marker centering must keep the popup open",Boolean.parseBoolean(js("!!document.querySelector('.native-popup')")));
+            AtomicReference<float[]> popupMapCenter=new AtomicReference<>();
+            instrumentation.runOnMainSync(() -> {
+                int[] origin=new int[2]; activity.getNativeMapPlugin().currentMapView().getLocationOnScreen(origin);
+                popupMapCenter.set(new float[]{origin[0]+activity.getNativeMapPlugin().currentMapView().getWidth()*.58f,
+                    origin[1]+activity.getNativeMapPlugin().currentMapView().getHeight()*.52f});
+            });
+            drag(popupMapCenter.get()[0],popupMapCenter.get()[1],-140,90);
+            waitForJs("!document.querySelector('.native-popup')");
+            saveScreenshot("native-integrated-popup-dismissed.png");
             tapWebControl(".gpx-open-btn");
             waitForJs("!!document.querySelector('.gpx-dialog')");
             tapWebControl(".gpx-close-btn");
@@ -202,6 +215,11 @@ public class NativeMapGestureTest {
         for(int i=1;i<=24;i++){SystemClock.sleep(30);send(down,MotionEvent.ACTION_MOVE,2,x,y,radius,degrees*i/24);}
         send(down,MotionEvent.ACTION_POINTER_UP|(1<<MotionEvent.ACTION_POINTER_INDEX_SHIFT),2,x,y,radius,degrees);
         send(down,MotionEvent.ACTION_UP,1,x,y,radius,degrees);
+    }
+    private void drag(float x,float y,float dx,float dy) {
+        long down=SystemClock.uptimeMillis();send(down,MotionEvent.ACTION_DOWN,1,x,y,0,0);
+        for(int i=1;i<=12;i++){SystemClock.sleep(25);send(down,MotionEvent.ACTION_MOVE,1,x+dx*i/12,y+dy*i/12,0,0);}
+        send(down,MotionEvent.ACTION_UP,1,x+dx,y+dy,0,0);
     }
     private void send(long down,int action,int count,float x,float y,float radius,float angle) {
         MotionEvent.PointerProperties[] properties=new MotionEvent.PointerProperties[count];

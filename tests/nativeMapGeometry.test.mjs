@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { measureNativeMap } from '../src/services/nativeMap.js';
+import { createNativeCameraMoveGuard, measureNativeMap } from '../src/services/nativeMap.js';
 
 const rect = (x,y,width,height) => ({ x,y,width,height,left:x,top:y,right:x+width,bottom:y+height });
 test('native touch exclusions follow the visual viewport when iOS focuses a form', () => {
@@ -34,4 +34,22 @@ test('native information actions remain within an iPad map after a keyboard tran
   const edge = clampNativePopup({x:2000,y:2000},map,viewport,260);
   assert.ok(edge.x+140 <= 1020);
   assert.ok(edge.y <= 1098);
+});
+
+test('native popup closes only for user camera movement', async () => {
+  let time = 0;
+  const guard = createNativeCameraMoveGuard({ now: () => time, graceMs: 120 });
+  let finishCommand;
+  const command = guard.run(() => new Promise((resolve) => { finishCommand = resolve; }));
+
+  assert.equal(guard.isUserMove(), false);
+  time = 500;
+  assert.equal(guard.isUserMove(), false, 'pending app camera commands remain programmatic');
+  finishCommand({ latitude: 37.5, longitude: 127 });
+  await command;
+  assert.equal(guard.isUserMove(), false, 'late native camera events keep a short grace period');
+  time = 619;
+  assert.equal(guard.isUserMove(), false);
+  time = 620;
+  assert.equal(guard.isUserMove(), true, 'the next unguarded camera move is a user gesture');
 });
