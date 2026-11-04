@@ -1,5 +1,6 @@
 package com.sharewater.app;
 
+import android.Manifest;
 import android.app.Instrumentation;
 import android.graphics.Bitmap;
 import android.os.SystemClock;
@@ -29,6 +30,7 @@ public class NativeMapGestureTest {
     private MainActivity activity;
 
     @Test public void twoFingerRotationWebControlsResizeAndLongPress() throws Exception {
+        grantLocationPermission();
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
             scenario.onActivity(instance -> activity=instance);
             long deadline=SystemClock.uptimeMillis()+60000;
@@ -106,6 +108,7 @@ public class NativeMapGestureTest {
         }
     }
     @Test public void integratedMapControlsAndRegistrationCancel() throws Exception {
+        grantLocationPermission();
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
             scenario.onActivity(instance -> activity=instance);
             long deadline=SystemClock.uptimeMillis()+60000;
@@ -133,7 +136,13 @@ public class NativeMapGestureTest {
                 popupMapCenter.set(new float[]{origin[0]+activity.getNativeMapPlugin().currentMapView().getWidth()*.58f,
                     origin[1]+activity.getNativeMapPlugin().currentMapView().getHeight()*.52f});
             });
-            drag(popupMapCenter.get()[0],popupMapCenter.get()[1],-140,90);
+            drag(popupMapCenter.get()[0],popupMapCenter.get()[1],-40,20);
+            SystemClock.sleep(400);
+            assertTrue("Popup must follow while the selected marker remains on the map",Boolean.parseBoolean(js("!!document.querySelector('.native-popup')")));
+            for(int i=0;i<4 && Boolean.parseBoolean(js("!!document.querySelector('.native-popup')"));i++) {
+                drag(popupMapCenter.get()[0],popupMapCenter.get()[1],-280,0);
+                SystemClock.sleep(350);
+            }
             waitForJs("!document.querySelector('.native-popup')");
             saveScreenshot("native-integrated-popup-dismissed.png");
             tapWebControl(".gpx-open-btn");
@@ -177,6 +186,11 @@ public class NativeMapGestureTest {
             SystemClock.sleep(100);
         }
         fail("Expected browser state: "+expression);
+    }
+    private void grantLocationPermission() {
+        String packageName=instrumentation.getTargetContext().getPackageName();
+        instrumentation.getUiAutomation().grantRuntimePermission(packageName,Manifest.permission.ACCESS_FINE_LOCATION);
+        instrumentation.getUiAutomation().grantRuntimePermission(packageName,Manifest.permission.ACCESS_COARSE_LOCATION);
     }
     private double bearing() {
         AtomicReference<Double> value=new AtomicReference<>();

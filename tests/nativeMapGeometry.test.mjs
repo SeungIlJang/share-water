@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createNativeCameraMoveGuard, measureNativeMap } from '../src/services/nativeMap.js';
+import { measureNativeMap, nativeMarkerInsideMap } from '../src/services/nativeMap.js';
 
 const rect = (x,y,width,height) => ({ x,y,width,height,left:x,top:y,right:x+width,bottom:y+height });
 test('native touch exclusions follow the visual viewport when iOS focuses a form', () => {
@@ -36,20 +36,13 @@ test('native information actions remain within an iPad map after a keyboard tran
   assert.ok(edge.y <= 1098);
 });
 
-test('native popup closes only for user camera movement', async () => {
-  let time = 0;
-  const guard = createNativeCameraMoveGuard({ now: () => time, graceMs: 120 });
-  let finishCommand;
-  const command = guard.run(() => new Promise((resolve) => { finishCommand = resolve; }));
-
-  assert.equal(guard.isUserMove(), false);
-  time = 500;
-  assert.equal(guard.isUserMove(), false, 'pending app camera commands remain programmatic');
-  finishCommand({ latitude: 37.5, longitude: 127 });
-  await command;
-  assert.equal(guard.isUserMove(), false, 'late native camera events keep a short grace period');
-  time = 619;
-  assert.equal(guard.isUserMove(), false);
-  time = 620;
-  assert.equal(guard.isUserMove(), true, 'the next unguarded camera move is a user gesture');
+test('native popup remains while its marker is inside the map and closes outside', () => {
+  const map = rect(10, 20, 300, 500);
+  assert.equal(nativeMarkerInsideMap({ x: 160, y: 250 }, map), true);
+  assert.equal(nativeMarkerInsideMap({ x: 10, y: 20 }, map), true);
+  assert.equal(nativeMarkerInsideMap({ x: 310, y: 520 }, map), true);
+  assert.equal(nativeMarkerInsideMap({ x: 9, y: 250 }, map), false);
+  assert.equal(nativeMarkerInsideMap({ x: 311, y: 250 }, map), false);
+  assert.equal(nativeMarkerInsideMap({ x: 160, y: 19 }, map), false);
+  assert.equal(nativeMarkerInsideMap({ x: 160, y: 521 }, map), false);
 });

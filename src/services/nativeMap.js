@@ -3,24 +3,9 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 export const NativeMap = registerPlugin('WaterNativeMap');
 export const nativeMapAvailable = () => Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('WaterNativeMap');
 
-export function createNativeCameraMoveGuard({ now = () => performance.now(), graceMs = 120 } = {}) {
-  let activeCommands = 0;
-  let programmaticUntil = 0;
-  const markProgrammatic = () => { programmaticUntil = Math.max(programmaticUntil, now() + graceMs); };
-
-  return {
-    async run(command) {
-      activeCommands += 1;
-      markProgrammatic();
-      try { return await command(); }
-      finally {
-        activeCommands = Math.max(0, activeCommands - 1);
-        markProgrammatic();
-      }
-    },
-    isUserMove() { return activeCommands === 0 && now() >= programmaticUntil; },
-  };
-}
+export const nativeMarkerInsideMap = (point, map) => Boolean(point && map
+  && point.x >= map.left && point.x <= map.right
+  && point.y >= map.top && point.y <= map.bottom);
 
 // A keyboard/viewport transition can temporarily project the selected marker
 // outside the visible map. Keep its actionable card on screen during that move.
